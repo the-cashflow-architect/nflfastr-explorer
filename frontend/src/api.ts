@@ -74,12 +74,29 @@ export function checkHealth() {
   return request<{ status: string }>('/api/health')
 }
 
+export function fetchDataQuality(
+  datasetId: string,
+  body: {
+    filters: FilterCondition[]
+  },
+) {
+  return request<{
+    total_rows: number
+    filtered_rows: number
+    columns: { id: string; label: string; null_pct: number; category: string }[]
+  }>(`/api/datasets/${datasetId}/data-quality`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function exportDataset(
   datasetId: string,
   body: {
     filters: FilterCondition[]
     sort: SortSpec[]
     columns?: string[]
+    format?: 'csv' | 'json'
   },
 ) {
   return requestBlob(`/api/datasets/${datasetId}/export`, {

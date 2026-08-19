@@ -6,8 +6,14 @@ import { ColumnPicker } from './components/ColumnPicker'
 import { DataTable, type SortState } from './components/DataTable'
 import { FilterPanel } from './components/FilterPanel'
 import { PlayerCompare } from './components/PlayerCompare'
+import { TeamCompare } from './components/TeamCompare'
 import { StatTrendChart, MultiStatTrend } from './components/StatTrendChart'
 import { SavedQueriesPanel } from './components/SavedQueriesPanel'
+import { ShareButton } from './components/ShareButton'
+import { SortPanel } from './components/SortPanel'
+import { useUrlState } from './hooks/useUrlState'
+import { DataQualityIndicator } from './components/DataQualityIndicator'
+import { QuickStats } from './components/QuickStats'
 import { activeFiltersToConditions } from './lib/filters'
 import type { ActiveFilter, ColumnMeta, DatasetSummary, FilterCondition, SortSpec } from './types'
 
@@ -26,9 +32,48 @@ function ExplorerApp() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [sorting, setSorting] = useState<SortState[]>([])
   const [page, setPage] = useState(1)
-  const [viewMode, setViewMode] = useState<'explore' | 'compare'>('explore')
+  const [viewMode, setViewMode] = useState<'explore' | 'compare' | 'team'>('explore')
   const [exploreView, setExploreView] = useState<'table' | 'chart'>('table')
   const pageSize = 50
+
+  const { urlState, isRestoring, updateUrl, getShareableUrl } = useUrlState()
+
+  // Restore state from URL on mount/navigation
+  useEffect(() => {
+    if (urlState && !isRestoring) {
+      setDatasetId(urlState.datasetId)
+      setActiveFilters(
+        urlState.filters.map((f: FilterCondition) => ({
+          def: { id: f.field, field: f.field, label: f.field, type: 'multi_select' as const, category: 'other', depends_on: [] },
+          value: f.value,
+        })),
+      )
+      setSorting(
+        urlState.sort.map((s: SortSpec) => ({ id: s.field, desc: s.direction === 'desc' })),
+      )
+      setVisibleColumns(urlState.columns)
+      setPage(urlState.page)
+      setViewMode(urlState.viewMode)
+      setExploreView(urlState.exploreView)
+    }
+  }, [urlState, isRestoring])
+
+  // Update URL when state changes
+  const currentState = useMemo(() => ({
+    datasetId,
+    filters: activeFiltersToConditions(activeFilters),
+    sort: sorting.map((s) => ({ field: s.id, direction: s.desc ? 'desc' as const : 'asc' as const })),
+    columns: visibleColumns,
+    page,
+    viewMode,
+    exploreView,
+  }), [datasetId, activeFilters, sorting, visibleColumns, page, viewMode, exploreView])
+
+  useEffect(() => {
+    if (!isRestoring) {
+      updateUrl(currentState, true)
+    }
+  }, [currentState, isRestoring, updateUrl])
 
   const { data: datasets } = useQuery({
     queryKey: ['datasets'],
@@ -164,6 +209,18 @@ function ExplorerApp() {
                 visibleColumns={visibleColumns}
                 filterConditions={filterConditions}
               />
+              {viewMode === 'explore' && schema && (
+                <div className="mt-4">
+                  <SortPanel
+                    sorting={sorting.map((s) => ({ field: s.id, direction: s.desc ? 'desc' as const : 'asc' as const }))}
+                    onSortingChange={(next) => {
+                      setSorting(next.map((s) => ({ id: s.field, desc: s.direction === 'desc' })))
+                      setPage(1)
+                    }}
+                    columns={schema.columns}
+                  />
+                </div>
+              )}
             </>
           ) : (
             <div className="h-full animate-pulse rounded-2xl bg-slate-900/40" />
@@ -187,13 +244,19 @@ function ExplorerApp() {
                 />
               ) : null}
               {schema && queryData && (
-                <ExportButton
-                  datasetId={datasetId}
-                  filters={filterConditions}
-                  sort={sortSpec}
-                  columns={visibleColumns}
-                  totalRows={queryData.total}
-                />
+                <>
+                  <ExportButton
+                    datasetId={datasetId}
+                    filters={filterConditions}
+                    sort={sortSpec}
+                    columns={visibleColumns}
+                    totalRows={queryData.total}
+                  />
+                  <ShareButton
+                    getShareableUrl={getShareableUrl}
+                    currentState={currentState}
+                  />
+                </>
               )}
               {schema && datasetId !== 'play_by_play' && (
                 <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
@@ -217,7 +280,18 @@ function ExplorerApp() {
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    Compare
+                    Player
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('team')}
+                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                      viewMode === 'team'
+                        ? 'bg-blue-500/20 text-blue-200'
+                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Team
                   </button>
                 </div>
               )}
@@ -257,66 +331,83 @@ function ExplorerApp() {
                 <p className="text-sm text-slate-400">Loading nflfastR data…</p>
               </div>
             </div>
-          ) : (
-            <>
-              {viewMode === 'explore' ? (
+) : (
                 <>
-                  {exploreView === 'table' ? (
+                  {viewMode === 'explore' ? (
                     <>
-                      <DataTable
-                        rows={queryData?.rows ?? []}
-                        columns={queryData?.columns ?? visibleColumns}
-                        columnMeta={schema.columns}
-                        sorting={sorting}
-                        onSortingChange={(next) => {
-                          setSorting(next)
-                          setPage(1)
-                        }}
-                        loading={isFetching}
-                      />
+                      {exploreView === 'table' ? (
+                        <>
+                          <DataTable
+                            rows={queryData?.rows ?? []}
+                            columns={queryData?.columns ?? visibleColumns}
+                            columnMeta={schema.columns}
+                            sorting={sorting}
+                            onSortingChange={(next) => {
+                              setSorting(next)
+                              setPage(1)
+                            }}
+                            loading={isFetching}
+                          />
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-sm">
-                        <span className="text-slate-400">
-                          {queryData
-                            ? `${queryData.total.toLocaleString()} matching rows`
-                            : '—'}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={page <= 1}
-                            onClick={() => setPage((p) => p - 1)}
-                            className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
-                          >
-                            Previous
-                          </button>
-                          <span className="text-slate-400">
-                            Page {page} of {totalPages}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage((p) => p + 1)}
-                            className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </div>
+                          {queryData && (
+                            <DataQualityIndicator
+                              datasetId={datasetId}
+                              filters={filterConditions}
+                              totalRows={queryData.total}
+                            />
+                          )}
+
+                          {queryData && (
+                            <QuickStats
+                              rows={queryData.rows}
+                              columns={queryData.columns}
+                            />
+                          )}
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-sm">
+                            <span className="text-slate-400">
+                              {queryData
+                                ? `${queryData.total.toLocaleString()} matching rows`
+                                : '—'}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={page <= 1}
+                                onClick={() => setPage((p) => p - 1)}
+                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
+                              >
+                                Previous
+                              </button>
+                              <span className="text-slate-400">
+                                Page {page} of {totalPages}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage((p) => p + 1)}
+                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <StatCharts
+                          schema={schema}
+                          queryData={queryData}
+                          visibleColumns={visibleColumns}
+                        />
+                      )}
                     </>
+                  ) : viewMode === 'compare' ? (
+                    <PlayerCompare datasetId={datasetId} schema={schema} activeFilters={activeFilters} />
                   ) : (
-                    <StatCharts
-                      schema={schema}
-                      queryData={queryData}
-                      visibleColumns={visibleColumns}
-                    />
+                    <TeamCompare datasetId={datasetId} schema={schema} activeFilters={activeFilters} />
                   )}
                 </>
-              ) : (
-                <PlayerCompare datasetId={datasetId} schema={schema} activeFilters={activeFilters} />
               )}
-            </>
-          )}
         </section>
       </main>
     </div>
@@ -430,15 +521,16 @@ function ExportButton({
   totalRows: number
 }) {
   const [exporting, setExporting] = useState(false)
+  const [format, setFormat] = useState<'csv' | 'json'>('csv')
 
   const handleExport = async () => {
     setExporting(true)
     try {
-      const blob = await exportDataset(datasetId, { filters, sort, columns })
+      const blob = await exportDataset(datasetId, { filters, sort, columns, format })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${datasetId}_export.csv`
+      a.download = `${datasetId}_export.${format}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -452,15 +544,41 @@ function ExportButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleExport}
-      disabled={exporting || totalRows === 0}
-      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80 disabled:opacity-40 disabled:cursor-not-allowed"
-    >
-      <Download className="h-4 w-4" />
-      Export CSV ({totalRows.toLocaleString()})
-    </button>
+    <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+        <button
+          type="button"
+          onClick={() => setFormat('csv')}
+          className={`rounded-md px-2.5 py-1 text-xs transition ${
+            format === 'csv'
+              ? 'bg-blue-500/20 text-blue-200'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => setFormat('json')}
+          className={`rounded-md px-2.5 py-1 text-xs transition ${
+            format === 'json'
+              ? 'bg-blue-500/20 text-blue-200'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          JSON
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={handleExport}
+        disabled={exporting || totalRows === 0}
+        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <Download className="h-4 w-4" />
+        Export ({totalRows.toLocaleString()})
+      </button>
+    </div>
   )
 }
 

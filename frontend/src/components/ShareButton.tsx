@@ -1,23 +1,24 @@
-import { Share2, Copy, Check, Link } from 'lucide-react'
+import { Share2, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
+import type { FilterCondition, SortSpec } from '../types'
 
 interface ShareButtonProps {
   getShareableUrl: (state: {
     datasetId: string
-    filters: unknown[]
-    sort: unknown[]
+    filters: FilterCondition[]
+    sort: SortSpec[]
     columns: string[]
     page: number
-    viewMode: 'explore' | 'compare'
+    viewMode: 'explore' | 'compare' | 'team'
     exploreView: 'table' | 'chart'
   }) => string
   currentState: {
     datasetId: string
-    filters: unknown[]
-    sort: unknown[]
+    filters: FilterCondition[]
+    sort: SortSpec[]
     columns: string[]
     page: number
-    viewMode: 'explore' | 'compare'
+    viewMode: 'explore' | 'compare' | 'team'
     exploreView: 'table' | 'chart'
   }
 }

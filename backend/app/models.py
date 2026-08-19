@@ -45,6 +45,13 @@ class FilterOptionsRequest(BaseModel):
     limit: int = Field(default=200, ge=1, le=1000)
 
 
+class ExportRequest(BaseModel):
+    filters: list[FilterCondition] = Field(default_factory=list)
+    sort: list[SortSpec] = Field(default_factory=list)
+    columns: list[str] | None = None
+    format: Literal["csv", "json"] = "csv"
+
+
 class ColumnMeta(BaseModel):
     id: str
     label: str
@@ -88,3 +95,9 @@ class FilterOptionsResponse(BaseModel):
     field: str
     options: list[Any]
     total: int
+
+
+class DataQualityResponse(BaseModel):
+    total_rows: int
+    filtered_rows: int
+    columns: list[dict[str, Any]]

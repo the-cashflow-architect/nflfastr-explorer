@@ -270,4 +270,43 @@ class DataStore:
         return FilterOptionsResponse(field=field, options=options, total=total)
 
 
+    def data_quality(
+        self,
+        dataset_id: str,
+        filters: list[FilterCondition],
+    ) -> DataQualityResponse:
+        self.load()
+        cfg = DATASETS[dataset_id]
+        table = cfg.table
+        columns = self._columns[table]
+
+        where_sql, params = build_where(filters)
+        
+        count_sql = f'SELECT COUNT(*) FROM {table}{where_sql}'
+        filtered_count = int(self.conn.execute(count_sql, params).fetchone()[0])
+
+        total_sql = f'SELECT COUNT(*) FROM {table}'
+        total_count = int(self.conn.execute(total_sql).fetchone()[0])
+
+        # Compute null percentages for numeric columns
+        column_stats = []
+        for col in columns:
+            null_count_sql = f'SELECT COUNT(*) FROM {table}{where_sql} WHERE "{col}" IS NULL'
+            null_count = int(self.conn.execute(null_count_sql, params).fetchone()[0])
+            null_pct = (null_count / filtered_count * 100) if filtered_count > 0 else 0
+            meta = get_column_meta(col, self._dtypes[table][col])
+            column_stats.append({
+                "id": col,
+                "label": meta["label"],
+                "null_pct": round(null_pct, 1),
+                "category": categorize_column(col),
+            })
+
+        return DataQualityResponse(
+            total_rows=total_count,
+            filtered_rows=filtered_count,
+            columns=column_stats,
+        )
+
+
 store = DataStore()

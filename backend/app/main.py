@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .data_store import store
-from .models import FilterOptionsRequest, QueryRequest
+from .models import DataQualityResponse, ExportRequest, FilterOptionsRequest, QueryRequest
 
 logging.basicConfig(level=logging.INFO)
 
@@ -67,17 +67,35 @@ def filter_options(dataset_id: str, body: FilterOptionsRequest):
         raise HTTPException(status_code=404, detail="Dataset not found") from exc
 
 
+@app.post("/api/datasets/{dataset_id}/data-quality")
+def data_quality(dataset_id: str, body: QueryRequest):
+    try:
+        return store.data_quality(dataset_id, body.filters)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Dataset not found") from exc
+
+
 @app.post("/api/datasets/{dataset_id}/export")
-def export_dataset(dataset_id: str, body: QueryRequest):
+def export_dataset(dataset_id: str, body: ExportRequest):
     try:
         result = store.query(dataset_id, body, export_all=True)
-        csv_content = result.to_csv(index=False)
-        filename = f"{dataset_id}_export.csv"
-        return Response(
-            content=csv_content,
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        if body.format == "json":
+            import json
+            json_content = json.dumps(result.to_dict(orient="records"), default=str)
+            filename = f"{dataset_id}_export.json"
+            return Response(
+                content=json_content,
+                media_type="application/json",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        else:
+            csv_content = result.to_csv(index=False)
+            filename = f"{dataset_id}_export.csv"
+            return Response(
+                content=csv_content,
+                media_type="text/csv",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Dataset not found") from exc
     except ValueError as exc:

@@ -7,7 +7,7 @@ interface UrlState {
   sort: SortSpec[]
   columns: string[]
   page: number
-  viewMode: 'explore' | 'compare'
+  viewMode: 'explore' | 'compare' | 'team'
   exploreView: 'table' | 'chart'
 }
 
