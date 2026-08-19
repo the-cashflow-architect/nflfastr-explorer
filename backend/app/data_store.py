@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 import threading
 from dataclasses import dataclass
 from typing import Any, Iterator
 
 import duckdb
-import nflreadpy as nfl
-import polars as pl
+import requests
 
 from .config import (
     DATA_MAX_AGE_HOURS,
+    DOWNLOAD_TIMEOUT,
+    DUCKDB_MEMORY_LIMIT,
+    DUCKDB_THREADS,
     EXPORT_CHUNK_ROWS,
     EXPORT_MAX_ROWS,
     PBP_SEASONS,
@@ -50,6 +54,17 @@ from .query_builder import (
 )
 
 logger = logging.getLogger(__name__)
+
+# nflreadpy's downloader buffers each file in memory, parses it into a polars
+# frame, and hands back every column; we then copy that into DuckDB. That is
+# three full copies of the data, and it cost ~518 MB for the weekly player
+# table alone — enough to take down a small instance. These are the same
+# nflverse release files, streamed to disk and read by DuckDB directly, which
+# measures at roughly zero resident cost.
+NFLVERSE_RELEASE = "https://github.com/nflverse/nflverse-data/releases/download"
+PBP_URL = f"{NFLVERSE_RELEASE}/pbp/play_by_play_{{season}}.parquet"
+PLAYER_WEEK_URL = f"{NFLVERSE_RELEASE}/stats_player/stats_player_week_{{season}}.parquet"
+PLAYER_REG_URL = f"{NFLVERSE_RELEASE}/stats_player/stats_player_reg_{{season}}.parquet"
 
 PBP_COLUMNS = [
     "season",
@@ -98,6 +113,14 @@ class DatasetConfig:
     filters: list[FilterDef]
     default_columns: list[str]
     default_sort: list[SortSpec]
+    url_template: str
+    seasons: list[int]
+    # Restrict to these columns when the source file is much wider than what
+    # the app exposes. None keeps every column.
+    columns: list[str] | None = None
+
+    def urls(self) -> list[str]:
+        return [self.url_template.format(season=s) for s in self.seasons]
 
 
 DATASETS: dict[str, DatasetConfig] = {
@@ -109,6 +132,8 @@ DATASETS: dict[str, DatasetConfig] = {
         filters=PLAYER_WEEKLY_FILTERS,
         default_columns=DEFAULT_PLAYER_WEEKLY_COLUMNS,
         default_sort=DEFAULT_PLAYER_WEEKLY_SORT,
+        url_template=PLAYER_WEEK_URL,
+        seasons=PLAYER_SEASONS,
     ),
     "player_season": DatasetConfig(
         table="player_season",
@@ -118,6 +143,8 @@ DATASETS: dict[str, DatasetConfig] = {
         filters=PLAYER_SEASON_FILTERS,
         default_columns=DEFAULT_PLAYER_SEASON_COLUMNS,
         default_sort=DEFAULT_PLAYER_SEASON_SORT,
+        url_template=PLAYER_REG_URL,
+        seasons=PLAYER_SEASONS,
     ),
     "play_by_play": DatasetConfig(
         table="play_by_play",
@@ -127,6 +154,9 @@ DATASETS: dict[str, DatasetConfig] = {
         filters=PBP_FILTERS,
         default_columns=DEFAULT_PBP_COLUMNS,
         default_sort=DEFAULT_PBP_SORT,
+        url_template=PBP_URL,
+        seasons=PBP_SEASONS,
+        columns=PBP_COLUMNS,
     ),
 }
 
@@ -148,7 +178,19 @@ class DataStore:
     LOAD_LOG = "_load_log"
 
     def __init__(self, path: str | None = None, max_age_hours: int | None = None) -> None:
-        self.conn = duckdb.connect(path or duckdb_path())
+        db_path = path or duckdb_path()
+        self.conn = duckdb.connect(db_path)
+        # Must be set before any bulk load: DuckDB's default limit is derived
+        # from host RAM, which on a container is not the memory we actually
+        # have. Spill to disk beside the database rather than failing.
+        self.conn.execute(f"SET memory_limit = '{DUCKDB_MEMORY_LIMIT}'")
+        self.conn.execute(f"SET threads = {max(1, DUCKDB_THREADS)}")
+        # Bulk loads buffer far less without it, and nothing here depends on
+        # table row order — every query sorts explicitly.
+        self.conn.execute("SET preserve_insertion_order = false")
+        self.conn.execute(
+            f"SET temp_directory = '{os.path.join(os.path.dirname(db_path) or '.', 'duckdb_tmp')}'"
+        )
         self.max_age_hours = (
             DATA_MAX_AGE_HOURS if max_age_hours is None else max_age_hours
         )
@@ -196,23 +238,21 @@ class DataStore:
                 logger.info("Reusing persisted table %s", cfg.table)
             else:
                 try:
-                    # Download before dropping: a network failure must not
-                    # destroy a stale-but-serviceable copy.
-                    frame = self._fetch_frame(dataset_id)
+                    # Build into a staging table first: a network failure must
+                    # not destroy a stale-but-serviceable copy.
+                    staging = f"{cfg.table}__staging"
+                    cur.execute(f"DROP TABLE IF EXISTS {staging}")
+                    self._create_table(cur, dataset_id, staging)
                 except Exception:
+                    cur.execute(f"DROP TABLE IF EXISTS {cfg.table}__staging")
                     if not exists:
                         raise
                     logger.exception(
                         "Refresh of %s failed; serving the cached copy", cfg.table
                     )
                 else:
-                    cur.register("tmp_frame", frame.to_arrow())
                     cur.execute(f"DROP TABLE IF EXISTS {cfg.table}")
-                    cur.execute(
-                        f"CREATE TABLE {cfg.table} AS SELECT * FROM tmp_frame"
-                    )
-                    cur.unregister("tmp_frame")
-                    del frame
+                    cur.execute(f"ALTER TABLE {staging} RENAME TO {cfg.table}")
                     self._record_load(cur, cfg.table)
                     logger.info("Loaded %s", cfg.table)
 
@@ -247,19 +287,74 @@ class DataStore:
             f"INSERT INTO {self.LOAD_LOG} VALUES (?, now()::TIMESTAMP)", [table]
         )
 
-    def _fetch_frame(self, dataset_id: str) -> pl.DataFrame:
-        if dataset_id == "player_weekly":
-            logger.info("Downloading weekly player stats for %s", PLAYER_SEASONS)
-            return nfl.load_player_stats(PLAYER_SEASONS, summary_level="week")
-        if dataset_id == "player_season":
-            logger.info("Downloading season player stats for %s", PLAYER_SEASONS)
-            return nfl.load_player_stats(PLAYER_SEASONS, summary_level="reg")
-        if dataset_id == "play_by_play":
-            logger.info("Downloading play-by-play for %s", PBP_SEASONS)
-            pbp = nfl.load_pbp(PBP_SEASONS)
-            keep = [c for c in PBP_COLUMNS if c in pbp.columns]
-            return pbp.select(keep)
-        raise KeyError(dataset_id)
+    def _create_table(
+        self, cur: duckdb.DuckDBPyConnection, dataset_id: str, table: str
+    ) -> None:
+        """Materialise one dataset into `table` without buffering it in Python.
+
+        Each season's parquet is streamed to disk in fixed-size chunks, then
+        DuckDB reads the files directly. Column projection is pushed into the
+        parquet reader, so a table like play-by-play never materialises the
+        ~380 columns we don't expose.
+        """
+        cfg = DATASETS[dataset_id]
+        logger.info("Downloading %s for seasons %s", dataset_id, cfg.seasons)
+
+        paths: list[str] = []
+        try:
+            for url in cfg.urls():
+                paths.append(self._download_parquet(url))
+
+            select_sql = self._projection(cur, paths[0], cfg.columns)
+            files = ", ".join(f"'{p}'" for p in paths)
+            cur.execute(
+                f"CREATE TABLE {table} AS "
+                f"SELECT {select_sql} FROM read_parquet([{files}], union_by_name = true)"
+            )
+        finally:
+            for path in paths:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+    def _projection(
+        self,
+        cur: duckdb.DuckDBPyConnection,
+        sample_path: str,
+        columns: list[str] | None,
+    ) -> str:
+        """Build the SELECT list, keeping only columns the files really have."""
+        if not columns:
+            return "*"
+        available = {
+            row[0]
+            for row in cur.execute(
+                f"DESCRIBE SELECT * FROM read_parquet('{sample_path}')"
+            ).fetchall()
+        }
+        keep = [c for c in columns if c in available]
+        if not keep:
+            raise ValueError("source parquet has none of the expected columns")
+        return ", ".join(f'"{c}"' for c in keep)
+
+    def _download_parquet(self, url: str) -> str:
+        """Stream a remote parquet to a temp file using constant memory."""
+        fd, path = tempfile.mkstemp(suffix=".parquet")
+        try:
+            with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as resp:
+                resp.raise_for_status()
+                with os.fdopen(fd, "wb") as handle:
+                    for chunk in resp.iter_content(chunk_size=1 << 20):
+                        if chunk:
+                            handle.write(chunk)
+        except BaseException:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            raise
+        return path
 
     def preload(self) -> None:
         """Load every dataset, one at a time so peak memory stays low."""

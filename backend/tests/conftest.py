@@ -5,7 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import polars as pl
+import duckdb
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,31 +20,62 @@ os.environ.setdefault("PRELOAD_ON_STARTUP", "false")
 from app import data_store as ds_module  # noqa: E402
 
 
-def make_frame(rows: int = 60) -> pl.DataFrame:
-    """Small stand-in for an nflverse frame, with a deliberately null column."""
-    return pl.DataFrame(
-        {
-            "season": [2024 + (i % 2) for i in range(rows)],
-            "week": [(i % 18) + 1 for i in range(rows)],
-            "team": [["KC", "BUF", "SF"][i % 3] for i in range(rows)],
-            "player_display_name": [f"Player {i % 10}" for i in range(rows)],
-            "passing_yards": [float(i * 3) for i in range(rows)],
-            # Null for exactly half the rows, so null_pct must come out at 50.0
-            "cpoe": [None if i % 2 else float(i) for i in range(rows)],
-        }
+def write_fixture_parquet(path: str, rows: int = 60) -> str:
+    """Write a small stand-in for an nflverse parquet file.
+
+    Deliberately includes a column that is null in half the rows, and one
+    extra column no dataset config asks for, so column projection is
+    exercised for real.
+    """
+    con = duckdb.connect()
+    con.execute(
+        f"""
+        COPY (
+          SELECT
+            2024 + (i % 2)                         AS season,
+            (i % 18) + 1                           AS week,
+            ['KC','BUF','SF'][(i % 3) + 1]         AS team,
+            'Player ' || (i % 10)                  AS player_display_name,
+            (i * 3)::DOUBLE                        AS passing_yards,
+            CASE WHEN i % 2 = 0 THEN i::DOUBLE END AS cpoe,
+            'unused'                               AS a_column_we_never_select
+          FROM range({rows}) t(i)
+        ) TO '{path}' (FORMAT PARQUET)
+        """
     )
+    con.close()
+    return path
 
 
 @pytest.fixture
 def store_factory(tmp_path, monkeypatch):
-    """Build DataStores backed by a temp DuckDB file, with no network access."""
+    """Build DataStores whose downloads resolve to a local parquet file.
+
+    Only the network fetch is stubbed — the real projection, read_parquet,
+    staging-table swap, and freshness logic all run.
+    """
     calls: dict[str, int] = {}
+    source = write_fixture_parquet(str(tmp_path / "source.parquet"))
 
-    def fake_fetch(self, dataset_id: str) -> pl.DataFrame:
+    def fake_download(self, url: str) -> str:
+        # Copy so the caller's unlink() cannot delete the shared fixture.
+        target = tempfile.mkstemp(suffix=".parquet", dir=str(tmp_path))[1]
+        with open(source, "rb") as src, open(target, "wb") as dst:
+            dst.write(src.read())
+        return target
+
+    real_create = ds_module.DataStore._create_table
+
+    def counting_create(self, cur, dataset_id, table):
         calls[dataset_id] = calls.get(dataset_id, 0) + 1
-        return make_frame()
+        return real_create(self, cur, dataset_id, table)
 
-    monkeypatch.setattr(ds_module.DataStore, "_fetch_frame", fake_fetch)
+    monkeypatch.setattr(ds_module.DataStore, "_download_parquet", fake_download)
+    monkeypatch.setattr(ds_module.DataStore, "_create_table", counting_create)
+
+    # One season file per dataset keeps the expected row counts obvious.
+    for cfg in ds_module.DATASETS.values():
+        monkeypatch.setattr(cfg, "seasons", [2025])
 
     db_path = tmp_path / "test.duckdb"
 
@@ -53,6 +84,7 @@ def store_factory(tmp_path, monkeypatch):
 
     factory.calls = calls  # type: ignore[attr-defined]
     factory.db_path = db_path  # type: ignore[attr-defined]
+    factory.source = source  # type: ignore[attr-defined]
     return factory
 
 
