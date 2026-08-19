@@ -32,7 +32,7 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
     enabled: !!schema && !!playerName,
   })
 
-  const rows = playerData?.rows ?? []
+  const rows = useMemo(() => playerData?.rows ?? [], [playerData])
 
   // Aggregate data by season
   const seasonAggregates = useMemo(() => {

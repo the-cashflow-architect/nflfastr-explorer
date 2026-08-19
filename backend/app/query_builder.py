@@ -84,3 +84,16 @@ def build_select_columns(columns: list[str] | None, available: list[str]) -> str
     if not safe:
         return "*"
     return ", ".join(safe)
+
+
+def build_null_count_sql(table: str, columns: list[str], where_sql: str) -> str:
+    """One scan that yields the row count plus a non-null count per column.
+
+    COUNT(col) skips NULLs, so nulls are COUNT(*) - COUNT(col). Results are
+    read positionally, which sidesteps alias-quoting entirely. The previous
+    implementation issued a separate `WHERE col IS NULL` count per column —
+    100+ full scans for a single request on the player tables.
+    """
+    projections = ", ".join(f"COUNT({_quote_identifier(c)})" for c in columns)
+    head = "SELECT COUNT(*)" + (f", {projections}" if projections else "")
+    return f"{head} FROM {table}{where_sql}"

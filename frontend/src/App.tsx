@@ -14,7 +14,8 @@ import { PresetSelector } from './components/PresetSelector'
 import { FILTER_PRESETS } from './lib/presets'
 import { SortPanel } from './components/SortPanel'
 import { useUrlState } from './hooks/useUrlState'
-import { useKeyboardShortcuts, KeyboardShortcutHelp } from './hooks/useKeyboardShortcuts.tsx'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp'
 import { DataQualityIndicator } from './components/DataQualityIndicator'
 import { QuickStats } from './components/QuickStats'
 import { activeFiltersToConditions } from './lib/filters'
@@ -191,7 +192,7 @@ function ExplorerApp() {
           <div className="hidden items-center gap-4 text-xs text-slate-400 md:flex">
             <span className="inline-flex items-center gap-1.5">
               <Database className="h-3.5 w-3.5" />
-              {currentDataset?.row_count.toLocaleString() ?? '—'} rows
+              {currentDataset?.row_count?.toLocaleString() ?? '—'} rows
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Activity className="h-3.5 w-3.5 text-emerald-400" />
@@ -214,7 +215,9 @@ function ExplorerApp() {
                     }`}
                   >
               <span className="block text-sm font-semibold">{ds.name}</span>
-              <span className="block text-[11px] text-slate-400">{ds.row_count.toLocaleString()} rows</span>
+              <span className="block text-[11px] text-slate-400">
+                {ds.row_count != null ? `${ds.row_count.toLocaleString()} rows` : 'loading…'}
+              </span>
             </button>
           ))}
         </div>
@@ -478,29 +481,24 @@ function StatCharts({
   queryData: { rows: Record<string, unknown>[]; total: number } | undefined
   visibleColumns: string[]
 }) {
-  const rows = queryData?.rows ?? []
-  if (rows.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64 text-slate-500">
-        No data to chart. Adjust your filters.
-      </div>
-    )
-  }
+  // Memoised so the aggregation below has stable dependencies — `rows` would
+  // otherwise be a fresh array on every render and defeat the useMemo.
+  const rows = useMemo(() => queryData?.rows ?? [], [queryData])
 
   // Determine x-axis field (season or week)
   const hasWeek = visibleColumns.includes('week')
   const xField = hasWeek ? 'week' : 'season'
 
-  // Get numeric columns that are visible
-  const numericColumns = visibleColumns.filter((colId) => {
-    const meta = schema.columns.find((c) => c.id === colId)
-    return meta && (meta.dtype.includes('INT') || meta.dtype.includes('FLOAT') || meta.dtype.includes('DOUBLE') || meta.dtype.includes('DECIMAL'))
-  })
-
   // Default to key stats if no numeric columns selected
-  const defaultStatKeys = ['epa', 'fantasy_points_ppr', 'passing_yards', 'rushing_yards', 'receiving_yards', 'cpoe', 'wpa']
-  const chartStats = numericColumns.filter((c) => defaultStatKeys.includes(c)).slice(0, 4)
-  const finalStats = chartStats.length > 0 ? chartStats : numericColumns.slice(0, 4)
+  const finalStats = useMemo(() => {
+    const numericColumns = visibleColumns.filter((colId) => {
+      const meta = schema.columns.find((c) => c.id === colId)
+      return meta && (meta.dtype.includes('INT') || meta.dtype.includes('FLOAT') || meta.dtype.includes('DOUBLE') || meta.dtype.includes('DECIMAL'))
+    })
+    const defaultStatKeys = ['epa', 'fantasy_points_ppr', 'passing_yards', 'rushing_yards', 'receiving_yards', 'cpoe', 'wpa']
+    const chartStats = numericColumns.filter((c) => defaultStatKeys.includes(c)).slice(0, 4)
+    return chartStats.length > 0 ? chartStats : numericColumns.slice(0, 4)
+  }, [visibleColumns, schema])
 
   // Group by xField and aggregate (mean)
   const aggregated = useMemo(() => {
@@ -526,6 +524,16 @@ function StatCharts({
       }))
       .sort((a, b) => Number(a.x) - Number(b.x))
   }, [rows, xField, finalStats])
+
+  // Both bail-outs sit below every hook call — returning earlier would change
+  // the hook count between renders and crash React.
+  if (rows.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-500">
+        No data to chart. Adjust your filters.
+      </div>
+    )
+  }
 
   if (aggregated.length === 0) {
     return (
@@ -573,12 +581,14 @@ function ExportButton({
 }) {
   const [exporting, setExporting] = useState(false)
   const [format, setFormat] = useState<'csv' | 'json'>('csv')
+  const [notice, setNotice] = useState<string | null>(null)
 
   const handleExport = async () => {
     setExporting(true)
+    setNotice(null)
     try {
-      const blob = await exportDataset(datasetId, { filters, sort, columns, format })
-      const url = URL.createObjectURL(blob)
+      const result = await exportDataset(datasetId, { filters, sort, columns, format })
+      const url = URL.createObjectURL(result.blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${datasetId}_export.${format}`
@@ -586,9 +596,16 @@ function ExportButton({
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      // The server caps exports; say so rather than handing over a silently
+      // short file.
+      if (result.truncated && result.rows != null && result.matchingRows != null) {
+        setNotice(
+          `Exported the first ${result.rows.toLocaleString()} of ${result.matchingRows.toLocaleString()} matching rows. Add filters to narrow the export.`,
+        )
+      }
     } catch (err) {
       console.error('Export failed:', err)
-      alert('Export failed. Check console for details.')
+      setNotice('Export failed. Check the console for details.')
     } finally {
       setExporting(false)
     }
@@ -629,6 +646,11 @@ function ExportButton({
         <Download className="h-4 w-4" />
         Export ({totalRows.toLocaleString()})
       </button>
+      {notice && (
+        <p className="max-w-xs text-[11px] leading-snug text-amber-300/90" role="status">
+          {notice}
+        </p>
+      )}
     </div>
   )
 }
