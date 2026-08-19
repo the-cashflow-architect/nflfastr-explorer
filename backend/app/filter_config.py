@@ -301,12 +301,12 @@ DEFAULT_PBP_COLUMNS = [
 DEFAULT_PLAYER_WEEKLY_SORT = [
     SortSpec(field="season", direction="desc"),
     SortSpec(field="week", direction="desc"),
-    SortSpec(field="epa", direction="desc"),
+    SortSpec(field="fantasy_points_ppr", direction="desc"),
 ]
 
 DEFAULT_PLAYER_SEASON_SORT = [
     SortSpec(field="season", direction="desc"),
-    SortSpec(field="epa", direction="desc"),
+    SortSpec(field="fantasy_points_ppr", direction="desc"),
 ]
 
 DEFAULT_PBP_SORT = [
