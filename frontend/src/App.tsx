@@ -10,8 +10,11 @@ import { TeamCompare } from './components/TeamCompare'
 import { StatTrendChart, MultiStatTrend } from './components/StatTrendChart'
 import { SavedQueriesPanel } from './components/SavedQueriesPanel'
 import { ShareButton } from './components/ShareButton'
+import { PresetSelector } from './components/PresetSelector'
+import { FILTER_PRESETS } from './lib/presets'
 import { SortPanel } from './components/SortPanel'
 import { useUrlState } from './hooks/useUrlState'
+import { useKeyboardShortcuts, KeyboardShortcutHelp } from './hooks/useKeyboardShortcuts.tsx'
 import { DataQualityIndicator } from './components/DataQualityIndicator'
 import { QuickStats } from './components/QuickStats'
 import { activeFiltersToConditions } from './lib/filters'
@@ -29,6 +32,7 @@ const queryClient = new QueryClient({
 function ExplorerApp() {
   const [datasetId, setDatasetId] = useState('player_weekly')
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([])
+  const [presetFilters, setPresetFilters] = useState<FilterCondition[]>([])
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [sorting, setSorting] = useState<SortState[]>([])
   const [page, setPage] = useState(1)
@@ -61,13 +65,18 @@ function ExplorerApp() {
   // Update URL when state changes
   const currentState = useMemo(() => ({
     datasetId,
-    filters: activeFiltersToConditions(activeFilters),
+    filters: [...activeFiltersToConditions(activeFilters), ...presetFilters],
     sort: sorting.map((s) => ({ field: s.id, direction: s.desc ? 'desc' as const : 'asc' as const })),
     columns: visibleColumns,
     page,
     viewMode,
     exploreView,
-  }), [datasetId, activeFilters, sorting, visibleColumns, page, viewMode, exploreView])
+  }), [datasetId, activeFilters, presetFilters, sorting, visibleColumns, page, viewMode, exploreView])
+
+  const filterConditions = useMemo(
+    () => [...activeFiltersToConditions(activeFilters), ...presetFilters],
+    [activeFilters, presetFilters],
+  )
 
   useEffect(() => {
     if (!isRestoring) {
@@ -114,11 +123,6 @@ function ExplorerApp() {
     return () => window.removeEventListener('load-saved-query', handleLoad as EventListener)
   }, [])
 
-  const filterConditions = useMemo(
-    () => activeFiltersToConditions(activeFilters),
-    [activeFilters],
-  )
-
   const sortSpec = useMemo(
     () =>
       sorting.map((s) => ({
@@ -144,6 +148,31 @@ function ExplorerApp() {
   const totalPages = queryData ? Math.max(1, Math.ceil(queryData.total / pageSize)) : 1
   const currentDataset = datasets?.find((d) => d.id === datasetId)
 
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onToggleCompare: () => setViewMode('compare'),
+    onExport: () => {
+      if (queryData && queryData.total > 0) {
+        const event = new CustomEvent('export-csv')
+        window.dispatchEvent(event)
+      }
+    },
+    onSearch: () => {
+      (document.querySelector('input[placeholder*="Search"]') as HTMLInputElement | null)?.focus()
+    },
+    onCycleViewMode: (index) => {
+      const modes: ('explore' | 'compare' | 'team')[] = ['explore', 'compare', 'team']
+      if (schema && datasetId !== 'play_by_play' && modes[index]) {
+        setViewMode(modes[index])
+      }
+    },
+    onToggleChart: () => {
+      if (viewMode === 'explore') {
+        setExploreView((v) => (v === 'table' ? 'chart' : 'table'))
+      }
+    },
+  })
+
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
@@ -168,6 +197,7 @@ function ExplorerApp() {
               <Activity className="h-3.5 w-3.5 text-emerald-400" />
               Live nflverse
             </span>
+            <KeyboardShortcutHelp />
           </div>
         </div>
 
@@ -226,6 +256,27 @@ function ExplorerApp() {
             <div className="h-full animate-pulse rounded-2xl bg-slate-900/40" />
           )}
         </div>
+
+        {schema && (
+          <div>
+            <PresetSelector
+              datasetId={datasetId}
+              presets={FILTER_PRESETS}
+              onSelect={(presetFilters) => {
+                setPresetFilters(presetFilters)
+                setPage(1)
+              }}
+            />
+            {presetFilters.length > 0 && (
+              <button
+                onClick={() => setPresetFilters([])}
+                className="ml-2 rounded-lg border border-white/10 bg-slate-900/40 px-2 py-1 text-xs text-slate-400 hover:bg-white/5 hover:text-white"
+              >
+                Clear Presets
+              </button>
+            )}
+          </div>
+        )}
 
         <section className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">

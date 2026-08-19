@@ -1,12 +1,13 @@
-import { Users, X, ChevronDown } from 'lucide-react'
+import { Users, X, ChevronDown, BarChart3 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { queryDataset } from '../api'
 import { activeFiltersToConditions } from '../lib/filters'
 import { formatCell } from '../lib/filters'
-import type { ActiveFilter, ColumnMeta, FilterDef, SortSpec } from '../types'
+import type { ActiveFilter, ColumnMeta, DatasetSchema, FilterDef, SortSpec } from '../types'
 import { FILTER_CATEGORIES } from '../types'
 import { StatTooltip } from './StatTooltip'
+import { PlayerDetail } from './PlayerDetail'
 
 interface PlayerCompareProps {
   datasetId: string
@@ -22,6 +23,7 @@ interface PlayerCompareProps {
 export function PlayerCompare({ datasetId, schema, activeFilters }: PlayerCompareProps) {
   const [playerFilters, setPlayerFilters] = useState<ActiveFilter[]>([])
   const [compareMode, setCompareMode] = useState<'season' | 'weekly'>('season')
+  const [detailPlayer, setDetailPlayer] = useState<string | null>(null)
 
   const conditions = useMemo(
     () => activeFiltersToConditions([...activeFilters, ...playerFilters]),
@@ -111,7 +113,25 @@ export function PlayerCompare({ datasetId, schema, activeFilters }: PlayerCompar
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
+      {detailPlayer ? (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setDetailPlayer(null)}
+              className="rounded-lg border border-white/10 bg-slate-900/60 px-2.5 py-1.5 text-sm text-slate-300 hover:bg-slate-800/80"
+            >
+              ← Back
+            </button>
+            <h3 className="text-lg font-semibold text-white">Player Detail: {detailPlayer}</h3>
+          </div>
+          <PlayerDetail
+            datasetId={datasetId}
+            schema={schema as DatasetSchema}
+            playerName={detailPlayer}
+          />
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <Users className="h-5 w-5" />
@@ -159,6 +179,14 @@ export function PlayerCompare({ datasetId, schema, activeFilters }: PlayerCompar
                   className="hover:text-blue-400"
                 >
                   <X className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailPlayer(name)}
+                  className="ml-1 rounded p-0.5 text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  title={`View ${name} detail`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
                 </button>
               </span>
             ))}
@@ -223,12 +251,13 @@ export function PlayerCompare({ datasetId, schema, activeFilters }: PlayerCompar
           </div>
         )}
 
-        {compareLoading && (
+{compareLoading && (
           <div className="flex items-center justify-center py-8">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
