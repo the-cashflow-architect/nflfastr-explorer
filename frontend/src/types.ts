@@ -45,7 +45,9 @@ export interface DatasetSummary {
   name: string
   description: string
   source: string
-  row_count: number
+  // Null until the backend has finished loading that dataset.
+  row_count: number | null
+  loaded?: boolean
 }
 
 export interface DatasetSchema extends DatasetSummary {

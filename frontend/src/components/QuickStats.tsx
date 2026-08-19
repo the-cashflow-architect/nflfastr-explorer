@@ -43,8 +43,6 @@ export function QuickStats({ rows, columns }: QuickStatsProps) {
     return STAT_CONFIGS.filter((stat) => columns.includes(stat.id))
   }, [columns])
 
-  if (availableStats.length === 0 || rows.length === 0) return null
-
   const computedStats = useMemo(() => {
     return availableStats.map((stat) => {
       const values = rows
@@ -62,6 +60,10 @@ export function QuickStats({ rows, columns }: QuickStatsProps) {
       return { ...stat, value }
     })
   }, [availableStats, rows])
+
+  // Bail out *after* every hook has run — an early return above the useMemo
+  // changes the hook count between renders and crashes React.
+  if (availableStats.length === 0 || rows.length === 0) return null
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">

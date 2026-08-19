@@ -22,7 +22,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+export interface BlobResult {
+  blob: Blob
+  /** Rows actually written, once the server cap was applied. */
+  rows: number | null
+  /** Rows the filters matched, before the cap. */
+  matchingRows: number | null
+  truncated: boolean
+}
+
+async function requestBlob(path: string, init?: RequestInit): Promise<BlobResult> {
   const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
@@ -32,7 +41,17 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
     const detail = await res.text()
     throw new Error(detail || `Request failed: ${res.status}`)
   }
-  return res.blob()
+  const num = (name: string) => {
+    const raw = res.headers.get(name)
+    const parsed = raw == null ? NaN : Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return {
+    blob: await res.blob(),
+    rows: num('X-Export-Rows'),
+    matchingRows: num('X-Export-Matching-Rows'),
+    truncated: res.headers.get('X-Export-Truncated') === 'true',
+  }
 }
 
 export function fetchDatasets() {
@@ -101,6 +120,7 @@ export function exportDataset(
     sort: SortSpec[]
     columns?: string[]
     format?: 'csv' | 'json'
+    max_rows?: number
   },
 ) {
   return requestBlob(`/api/datasets/${datasetId}/export`, {

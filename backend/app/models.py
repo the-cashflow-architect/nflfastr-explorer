@@ -50,6 +50,8 @@ class ExportRequest(BaseModel):
     sort: list[SortSpec] = Field(default_factory=list)
     columns: list[str] | None = None
     format: Literal["csv", "json"] = "csv"
+    # Client-requested cap; the server clamps this to EXPORT_MAX_ROWS.
+    max_rows: int | None = Field(default=None, ge=1)
 
 
 class ColumnMeta(BaseModel):
