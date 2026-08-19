@@ -54,7 +54,9 @@ export function ColumnPicker({ allColumns, selected, onChange }: ColumnPickerPro
             <div className="space-y-3">
               {grouped.map(([category, cols]) => (
                 <div key={category}>
-                  <p className="mb-1 text-[11px] font-medium uppercase text-slate-500">{category}</p>
+                   <p className="mb-1 text-[11px] font-medium uppercase text-slate-500">
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </p>
                   <div className="space-y-1">
                     {cols.map((col) => (
                       <label

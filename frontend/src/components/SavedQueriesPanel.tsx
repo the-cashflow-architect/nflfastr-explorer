@@ -67,9 +67,9 @@ export function SavedQueriesPanel({
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {datasetQueries.map((query) => (
-            <div
+             <div
               key={query.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2.5"
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.03]"
             >
               <div className="flex-1 min-w-0" onClick={() => handleLoad(query)}>
                 <p className="text-sm font-medium text-white truncate">{query.name}</p>

@@ -202,17 +202,17 @@ function ExplorerApp() {
         </div>
 
         <div className="mx-auto flex max-w-[1600px] gap-2 overflow-x-auto px-4 pb-3 lg:px-6">
-          {(datasets ?? []).map((ds: DatasetSummary) => (
+           {(datasets ?? []).map((ds: DatasetSummary) => (
             <button
               key={ds.id}
               type="button"
-              onClick={() => setDatasetId(ds.id)}
-              className={`shrink-0 rounded-xl px-4 py-2 text-left transition ${
-                datasetId === ds.id
-                  ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/40'
-                  : 'bg-slate-900/50 text-slate-300 ring-1 ring-white/5 hover:bg-slate-800/80'
-              }`}
-            >
+                    onClick={() => setDatasetId(ds.id)}
+                    className={`shrink-0 rounded-xl px-4 py-2 text-left transition-all duration-200 ${
+                      datasetId === ds.id
+                        ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/40 shadow-lg shadow-blue-500/10'
+                        : 'bg-slate-900/50 text-slate-300 ring-1 ring-white/5 hover:bg-slate-800/80 hover:ring-white/10'
+                    }`}
+                  >
               <span className="block text-sm font-semibold">{ds.name}</span>
               <span className="block text-[11px] text-slate-400">{ds.row_count.toLocaleString()} rows</span>
             </button>
@@ -314,9 +314,9 @@ function ExplorerApp() {
                   <button
                     type="button"
                     onClick={() => setViewMode('explore')}
-                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                    className={`rounded-md px-3 py-1.5 text-sm transition-all duration-200 ${
                       viewMode === 'explore'
-                        ? 'bg-blue-500/20 text-blue-200'
+                        ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
@@ -325,9 +325,9 @@ function ExplorerApp() {
                   <button
                     type="button"
                     onClick={() => setViewMode('compare')}
-                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                    className={`rounded-md px-3 py-1.5 text-sm transition-all duration-200 ${
                       viewMode === 'compare'
-                        ? 'bg-blue-500/20 text-blue-200'
+                        ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
@@ -336,9 +336,9 @@ function ExplorerApp() {
                   <button
                     type="button"
                     onClick={() => setViewMode('team')}
-                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                    className={`rounded-md px-3 py-1.5 text-sm transition-all duration-200 ${
                       viewMode === 'team'
-                        ? 'bg-blue-500/20 text-blue-200'
+                        ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
@@ -351,22 +351,22 @@ function ExplorerApp() {
                   <button
                     type="button"
                     onClick={() => setExploreView('table')}
-                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                    className={`rounded-md px-3 py-1.5 text-sm transition-all duration-200 ${
                       exploreView === 'table'
-                        ? 'bg-blue-500/20 text-blue-200'
+                        ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    }}`}
                   >
                     Table
                   </button>
                   <button
                     type="button"
                     onClick={() => setExploreView('chart')}
-                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                    className={`rounded-md px-3 py-1.5 text-sm transition-all duration-200 ${
                       exploreView === 'chart'
-                        ? 'bg-blue-500/20 text-blue-200'
+                        ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
-                    }`}
+                    }}`}
                   >
                     <BarChart2 className="h-4 w-4" />
                   </button>
@@ -426,7 +426,7 @@ function ExplorerApp() {
                                 type="button"
                                 disabled={page <= 1}
                                 onClick={() => setPage((p) => p - 1)}
-                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
+                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition-all duration-200 hover:bg-white/5 disabled:opacity-40"
                               >
                                 Previous
                               </button>
@@ -437,7 +437,7 @@ function ExplorerApp() {
                                 type="button"
                                 disabled={page >= totalPages}
                                 onClick={() => setPage((p) => p + 1)}
-                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
+                                className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition-all duration-200 hover:bg-white/5 disabled:opacity-40"
                               >
                                 Next
                               </button>
@@ -600,10 +600,10 @@ function ExportButton({
         <button
           type="button"
           onClick={() => setFormat('csv')}
-          className={`rounded-md px-2.5 py-1 text-xs transition ${
+          className={`rounded-md px-2.5 py-1 text-xs transition-all duration-200 ${
             format === 'csv'
-              ? 'bg-blue-500/20 text-blue-200'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
           }`}
         >
           CSV
@@ -611,11 +611,11 @@ function ExportButton({
         <button
           type="button"
           onClick={() => setFormat('json')}
-          className={`rounded-md px-2.5 py-1 text-xs transition ${
+          className={`rounded-md px-2.5 py-1 text-xs transition-all duration-200 ${
             format === 'json'
-              ? 'bg-blue-500/20 text-blue-200'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+              ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+          }}`}
         >
           JSON
         </button>
@@ -624,7 +624,7 @@ function ExportButton({
         type="button"
         onClick={handleExport}
         disabled={exporting || totalRows === 0}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition-all duration-200 hover:bg-slate-800/80 hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <Download className="h-4 w-4" />
         Export ({totalRows.toLocaleString()})

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Filter } from 'lucide-react'
 import { useMemo } from 'react'
 import { formatCell } from '../lib/filters'
 import type { ColumnMeta } from '../types'
@@ -57,11 +57,11 @@ export function DataTable({
                     key={colId}
                     className="whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400"
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(colId)}
-                      className="inline-flex items-center gap-1 transition hover:text-white"
-                    >
+                     <button
+                       type="button"
+                       onClick={() => toggleSort(colId)}
+                       className="inline-flex items-center gap-1 transition-all duration-200 hover:text-blue-300"
+                     >
                       <span>{meta?.label ?? colId}</span>
                       {meta ? <StatTooltip column={meta} /> : null}
                       {sorted ? (
@@ -81,16 +81,20 @@ export function DataTable({
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-16 text-center text-slate-500">
-                  No rows match your filters. Try broadening season or clearing a filter.
-                </td>
-              </tr>
-            ) : (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-16 text-center text-slate-500">
+                    <div className="flex flex-col items-center gap-2">
+                      <Filter className="h-8 w-8 text-slate-600/50" />
+                      <span className="text-sm">No rows match your filters.</span>
+                      <span className="text-xs">Try broadening filters or selecting different columns.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
               rows.map((row, idx) => (
-                <tr
+                 <tr
                   key={idx}
-                  className={`border-b border-white/5 transition hover:bg-white/[0.03] ${
+                  className={`group border-b border-white/5 transition-all duration-150 hover:bg-white/[0.04] ${
                     idx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]'
                   }`}
                 >

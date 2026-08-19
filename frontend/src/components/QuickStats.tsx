@@ -10,19 +10,18 @@ interface StatConfig {
   id: string
   label: string
   icon: React.ReactNode
-  format?: (val: number) => string
-  color?: 'blue' | 'emerald' | 'amber' | 'red'
+  color?: 'blue' | 'emerald' | 'amber' | 'red' | 'purple' | 'yellow'
   isSum?: boolean
 }
 
 const STAT_CONFIGS: StatConfig[] = [
-  { id: 'epa', label: 'Total EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true },
-  { id: 'passing_yards', label: 'Passing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true },
-  { id: 'rushing_yards', label: 'Rushing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true },
-  { id: 'receiving_yards', label: 'Receiving Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true },
-  { id: 'fantasy_points_ppr', label: 'Fantasy PPR', icon: <Target className="h-4 w-4" />, isSum: true },
-  { id: 'cpoe', label: 'Avg CPOE', icon: <Shield className="h-4 w-4" />, isSum: false },
-  { id: 'wpa', label: 'Total WPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true },
+  { id: 'epa', label: 'Total EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'blue' },
+  { id: 'passing_yards', label: 'Passing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'emerald' },
+  { id: 'rushing_yards', label: 'Rushing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'amber' },
+  { id: 'receiving_yards', label: 'Receiving Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'purple' },
+  { id: 'fantasy_points_ppr', label: 'Fantasy PPR', icon: <Target className="h-4 w-4" />, isSum: true, color: 'yellow' },
+  { id: 'cpoe', label: 'Avg CPOE', icon: <Shield className="h-4 w-4" />, isSum: false, color: 'blue' },
+  { id: 'wpa', label: 'Total WPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'red' },
 ]
 
 const COLORS = {
@@ -30,6 +29,8 @@ const COLORS = {
   emerald: 'text-emerald-400',
   amber: 'text-amber-400',
   red: 'text-red-400',
+  purple: 'text-purple-400',
+  yellow: 'text-yellow-400',
 }
 
 function formatNumber(val: number): string {
@@ -65,9 +66,9 @@ export function QuickStats({ rows, columns }: QuickStatsProps) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
       {computedStats.map((stat) => (
-        <div
+         <div
           key={stat.id}
-          className="rounded-xl border border-white/10 bg-slate-900/40 p-3 text-center transition hover:bg-slate-900/60"
+          className="group rounded-xl border border-white/10 bg-slate-900/40 p-3 text-center transition-all duration-200 hover:bg-slate-900/60 hover:shadow-lg hover:shadow-black/20"
         >
           <div className={`mb-1 inline-flex items-center justify-center ${COLORS[stat.color ?? 'blue']}`}>
             {stat.icon}

@@ -34,7 +34,7 @@ export function StatTrendChart({ data, xField, yField, columnMeta, playerName }:
   const xDomain = isNumericX ? ['auto', 'auto'] : chartData.map((d) => String(d.x))
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 transition-all duration-200">
       <div className="mb-3">
         <h4 className="font-semibold text-white flex items-center gap-2">
           {columnMeta.label} Trend
@@ -128,7 +128,7 @@ export function MultiStatTrend({ data, xField, yFields, columnsMeta, playerName 
   const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#ec4899']
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 transition-all duration-200">
       <div className="mb-3">
         <h4 className="font-semibold text-white flex items-center gap-2">
           Stat Trends

@@ -28,10 +28,10 @@ export function PresetSelector({ datasetId, onSelect, presets }: PresetSelectorP
       </label>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {datasetPresets.slice(0, 6).map((preset) => (
-          <button
+           <button
             key={preset.id}
             onClick={() => onSelect(preset.filters)}
-            className="flex flex-col items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/40 p-2.5 text-center transition hover:bg-white/5 hover:border-blue-400/30"
+            className="flex flex-col items-center gap-1.5 rounded-lg border border-white/10 bg-slate-950/40 p-2.5 text-center transition-all duration-200 hover:scale-105 hover:bg-white/5 hover:border-blue-400/30"
           >
             <span className="text-blue-400">{preset.icon}</span>
             <span className="text-sm font-medium text-slate-200">{preset.name}</span>
