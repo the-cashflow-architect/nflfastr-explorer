@@ -7,8 +7,11 @@ import type {
   SortSpec,
 } from './types'
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })
@@ -20,7 +23,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
-  const res = await fetch(path, {
+  const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path
+  const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })
