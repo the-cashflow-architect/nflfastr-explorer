@@ -74,6 +74,15 @@ def duckdb_path() -> str:
 PLAYER_SEASONS = _seasons_env("PLAYER_SEASONS", [2022, 2023, 2024, 2025])
 PBP_SEASONS = _seasons_env("PBP_SEASONS", [2025])
 
+# DuckDB sizes its buffer pool from total host RAM by default and cannot see a
+# container's cgroup limit, so on a small instance it happily over-allocates
+# and gets OOM-killed. Pin it, and give it a temp dir to spill into.
+DUCKDB_MEMORY_LIMIT = os.environ.get("DUCKDB_MEMORY_LIMIT", "128MB")
+DUCKDB_THREADS = _int_env("DUCKDB_THREADS", 1)
+
+# Seconds to wait on an nflverse parquet download.
+DOWNLOAD_TIMEOUT = _int_env("DOWNLOAD_TIMEOUT", 180)
+
 # Hard ceiling on an export. Without this, an unfiltered play-by-play export
 # materialises the entire table in memory and takes the process down.
 EXPORT_MAX_ROWS = _int_env("EXPORT_MAX_ROWS", 100_000)

@@ -212,10 +212,10 @@ def test_failed_refresh_falls_back_to_cached_copy(store_factory, monkeypatch):
         "WHERE table_name = 'player_weekly'"
     )
 
-    def boom(self, dataset_id):
+    def boom(self, url):
         raise RuntimeError("nflverse unreachable")
 
-    monkeypatch.setattr(ds.DataStore, "_fetch_frame", boom)
+    monkeypatch.setattr(ds.DataStore, "_download_parquet", boom)
 
     second = ds.DataStore(path=str(store_factory.db_path), max_age_hours=24)
     second.ensure_loaded("player_weekly")
@@ -226,10 +226,41 @@ def test_failed_first_load_propagates(store_factory, monkeypatch):
     """With nothing cached there is no fallback, so the error must surface."""
     import app.data_store as ds
 
-    def boom(self, dataset_id):
+    def boom(self, url):
         raise RuntimeError("nflverse unreachable")
 
-    monkeypatch.setattr(ds.DataStore, "_fetch_frame", boom)
+    monkeypatch.setattr(ds.DataStore, "_download_parquet", boom)
     fresh = ds.DataStore(path=str(store_factory.db_path))
     with pytest.raises(RuntimeError):
         fresh.ensure_loaded("player_weekly")
+
+
+def test_wide_source_columns_are_projected_away(store):
+    """PBP's source has ~380 columns; only the configured ones may load.
+
+    Loading every column is what exhausted the instance, so this pins the
+    projection rather than trusting it.
+    """
+    schema = store.get_schema("play_by_play")
+    loaded = {c.id for c in schema.columns}
+    assert "a_column_we_never_select" not in loaded
+    assert loaded <= set(ds_columns())
+
+
+def ds_columns():
+    import app.data_store as ds
+
+    return ds.PBP_COLUMNS
+
+
+def test_duckdb_memory_limit_is_pinned(store):
+    """DuckDB defaults to a share of host RAM, which a container does not have."""
+    cur = store._cursor()
+    limit = cur.execute("SELECT current_setting('memory_limit')").fetchone()[0]
+    assert limit not in (None, "")
+    # Must be well under a small instance; the default would be GB-scale.
+    assert "GB" not in limit.upper() or float(limit.upper().split("GB")[0]) <= 1
+    order = cur.execute(
+        "SELECT current_setting('preserve_insertion_order')"
+    ).fetchone()[0]
+    assert order is False or str(order).lower() == "false"
