@@ -222,6 +222,7 @@ export function TeamsExplorer({ navOpts, onDrillToTeam }: TeamsExplorerProps) {
             onSortingChange={setSorting}
             loading={isFetching}
             pinFirstColumn
+            rankOffset={0}
             onRowClick={(row) => onDrillToTeam(String(row.recent_team))}
             rowLabel={(row) => `View ${TEAM_NAMES[String(row.recent_team)] ?? row.recent_team} roster`}
             maxHeight="calc(100vh - 320px)"

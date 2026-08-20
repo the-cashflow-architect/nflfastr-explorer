@@ -145,7 +145,7 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "passing_epa": {
         "label": "Passing EPA",
-        "description": "Expected Points Added on dropbacks — measures play value vs. baseline expectation.",
+        "description": "How much better (or worse) this QB's throws made his team's scoring chances, added up over every dropback. A positive number means his passing is helping the team score; negative means it's hurting.",
         "formula": "Sum of EPA on pass attempts and sacks. EPA compares down/distance/field position before and after the play.",
     },
     "passing_2pt_conversions": {
@@ -154,17 +154,17 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "pacr": {
         "label": "PACR",
-        "description": "Passing Air Conversion Ratio — receiving yards divided by air yards.",
+        "description": "How efficiently a QB turns air yards (distance the ball travels before it's caught) into real yards gained. Above 1.0 means his receivers are gaining extra yards after the catch; below 1.0 means throws aren't converting into as much as their distance implied.",
         "formula": "passing_yards / passing_air_yards (when air yards > 0).",
     },
     "dakota": {
-        "label": "DakOTA",
-        "description": "Adjusted EPA per dropback metric that blends EPA and CPOE for quarterback evaluation.",
+        "label": "DAKOTA",
+        "description": "A single \"how good is this QB\" score that blends play value (EPA) with accuracy relative to expectation (CPOE), adjusting for how hard his throws were. Higher is better; it's built to compare quarterbacks more fairly than raw stats alone.",
         "formula": "nflfastR proprietary composite of EPA and completion probability over expected.",
     },
     "cpoe": {
         "label": "CPOE",
-        "description": "Completion Percentage Over Expected — actual completion rate minus model-predicted rate.",
+        "description": "Is this QB completing more or fewer passes than a typical passer would on the exact same throws (accounting for distance, coverage, etc.)? Positive means more accurate than expected for how hard the throws were; negative means less accurate.",
         "formula": "Actual completions / attempts − expected completion probability (nflfastR model).",
     },
     # Rushing
@@ -194,7 +194,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "rushing_epa": {
         "label": "Rushing EPA",
-        "description": "Expected Points Added on designed runs and scrambles attributed to the rusher.",
+        "description": "How much this player's carries added to (or subtracted from) his team's scoring chances, added up over the season. Positive means his running is helping the team score.",
+        "formula": "Sum of EPA on rushing plays (designed runs and QB scrambles) attributed to the rusher.",
     },
     "rushing_2pt_conversions": {
         "label": "Rushing 2PT",
@@ -231,7 +232,8 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "receiving_epa": {
         "label": "Receiving EPA",
-        "description": "Expected Points Added on targets to this receiver.",
+        "description": "How much this player's targets added to (or subtracted from) his team's scoring chances, added up over the season. Positive means throws his way are helping the team score.",
+        "formula": "Sum of EPA on plays where this player was the target.",
     },
     "receiving_fumbles": {
         "label": "Rec Fumbles",
@@ -247,21 +249,21 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "racr": {
         "label": "RACR",
-        "description": "Receiver Air Conversion Ratio — receiving yards divided by air yards.",
+        "description": "How efficiently a receiver turns the distance the ball traveled through the air into actual yards gained. Above 1.0 means he's adding extra yards after the catch relative to how far the ball was thrown; below 1.0 means less.",
         "formula": "receiving_yards / receiving_air_yards.",
     },
     "target_share": {
         "label": "Target Share",
-        "description": "Share of team pass targets on the field for this player.",
+        "description": "What percentage of his team's pass attempts were aimed at this player. A simple measure of how big a part of the passing offense he is — higher means the offense goes through him more.",
         "formula": "Player targets / team targets (when player on field).",
     },
     "air_yards_share": {
         "label": "Air Yards Share",
-        "description": "Share of team air yards on the player's targets.",
+        "description": "What percentage of his team's total \"downfield distance thrown\" belongs to this player's targets — a sign of whether he's used on deep, high-value throws versus short, low-value ones.",
     },
     "wopr": {
         "label": "WOPR",
-        "description": "Weighted Opportunity Rating — combines target share and air yards share.",
+        "description": "A single \"how big is this player's role in the passing game\" score that combines how often he's targeted with how far downfield those targets are. Higher means a bigger, more valuable role in the offense.",
         "formula": "1.5 × target_share + 0.7 × air_yards_share (Josh Hermsmeyer).",
     },
     # Defense / misc
@@ -654,7 +656,7 @@ GLOSSARY: dict[str, dict[str, str]] = {
     # EPA aggregates
     "epa": {
         "label": "EPA",
-        "description": "Expected Points Added by this individual play — how much the play changed the offense's scoring expectation.",
+        "description": "How much did this one play help or hurt the offense's chances of scoring? A big positive number is a great play; a big negative number is a bad one — it accounts for down, distance, and field position, not just yards gained.",
         "formula": "Expected points after the play minus expected points before it (nflfastR EP model).",
     },
     "fantasy_points": {
@@ -709,12 +711,12 @@ GLOSSARY: dict[str, dict[str, str]] = {
     },
     "wp": {
         "label": "Win Probability",
-        "description": "Estimated probability the posteam wins before the play.",
+        "description": "How likely the team with the ball was to win the game at the moment of this play, based on score, time, and field position.",
         "formula": "nflfastR win probability model at snap.",
     },
     "wpa": {
         "label": "WPA",
-        "description": "Win Probability Added — change in win probability from the play.",
+        "description": "How much this specific play swung the team's odds of winning the game — a walk-off touchdown might swing it 40+ points; a routine first-down run barely moves it.",
         "formula": "WP after play − WP before play.",
     },
     "air_yards": {

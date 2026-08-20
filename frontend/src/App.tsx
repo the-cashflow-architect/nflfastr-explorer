@@ -106,25 +106,32 @@ function ExplorerApp() {
       </header>
 
       <main className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 overflow-hidden p-4 lg:p-6">
-        {route === 'home' ? (
-          <div className="w-full overflow-auto">
-            <HomeView datasets={datasets} onNavigate={navigate} />
-          </div>
-        ) : route === 'players' ? (
-          <PlayersExplorer
-            navOpts={navOpts}
-            detailPlayer={detailPlayer}
-            setDetailPlayer={setDetailPlayer}
-            urlState={urlState}
-            isRestoring={isRestoring}
-            updateUrl={updateUrl}
-            getShareableUrl={getShareableUrl}
-          />
-        ) : route === 'teams' ? (
-          <TeamsExplorer navOpts={navOpts} onDrillToTeam={(team) => navigate('players', { team, position: 'all', statTab: 'basic' })} />
-        ) : (
-          <PlaysExplorer urlState={urlState} isRestoring={isRestoring} updateUrl={updateUrl} getShareableUrl={getShareableUrl} />
-        )}
+        {/* Every route's content lives in one scrollable column — without
+            it, this flex child never gets its own scrollbar and anything
+            taller than the viewport (a full table plus its footer stats)
+            is silently clipped by `overflow-hidden` above instead of being
+            reachable by scrolling the page. */}
+        <div className="flex w-full min-w-0 flex-1 overflow-auto">
+          {route === 'home' ? (
+            <div className="w-full">
+              <HomeView datasets={datasets} onNavigate={navigate} />
+            </div>
+          ) : route === 'players' ? (
+            <PlayersExplorer
+              navOpts={navOpts}
+              detailPlayer={detailPlayer}
+              setDetailPlayer={setDetailPlayer}
+              urlState={urlState}
+              isRestoring={isRestoring}
+              updateUrl={updateUrl}
+              getShareableUrl={getShareableUrl}
+            />
+          ) : route === 'teams' ? (
+            <TeamsExplorer navOpts={navOpts} onDrillToTeam={(team) => navigate('players', { team, position: 'all', statTab: 'basic' })} />
+          ) : (
+            <PlaysExplorer urlState={urlState} isRestoring={isRestoring} updateUrl={updateUrl} getShareableUrl={getShareableUrl} />
+          )}
+        </div>
       </main>
     </div>
   )
