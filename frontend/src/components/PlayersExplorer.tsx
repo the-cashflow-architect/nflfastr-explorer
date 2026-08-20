@@ -24,6 +24,7 @@ import { FilterBar } from './FilterBar'
 import { PlayerDetail } from './PlayerDetail'
 import { PositionPills } from './PositionPills'
 import { StatTabs } from './StatTabs'
+import { TimeFilter } from './TimeFilter'
 import { QuickStats } from './QuickStats'
 import { DataQualityIndicator } from './DataQualityIndicator'
 import { ErrorBanner } from './ErrorBanner'
@@ -74,12 +75,25 @@ export function PlayersExplorer({
   })
 
   // Every filterable field on the dataset, not just the handful the backend
-  // hand-curates: season/team/position/search fields come from the schema,
-  // every other numeric or flag column is generated on the fly.
+  // hand-curates: team/position/search fields come from the schema, every
+  // other numeric or flag column is generated on the fly. Season and week
+  // get their own always-visible TimeFilter row instead of a chip, so
+  // they're excluded here to avoid showing up twice.
   const allFilterDefs = useMemo(() => {
     if (!schema) return []
-    const backendDefs = schema.filters.filter((f) => f.id !== 'position_group')
+    const backendDefs = schema.filters.filter((f) => f.id !== 'position_group' && f.id !== 'season' && f.id !== 'week')
     return buildFilterDefs(schema.columns, backendDefs)
+  }, [schema])
+
+  const seasonDef = schema?.filters.find((f) => f.id === 'season') ?? null
+  const weekDef = schema?.filters.find((f) => f.id === 'week') ?? null
+
+  // The full universe of filter defs (including season/week/position_group,
+  // unlike allFilterDefs above) — used only to re-point active filters at
+  // the right def object, never rendered as chips directly.
+  const remapDefs = useMemo(() => {
+    if (!schema) return []
+    return buildFilterDefs(schema.columns, schema.filters)
   }, [schema])
 
   // Apply a team filter arriving from the Home page's "jump to a team" grid.
@@ -97,11 +111,11 @@ export function PlayersExplorer({
   // when granularity changes, so a stale field name never reaches the API —
   // that would otherwise 500 rather than just returning no rows.
   useEffect(() => {
-    if (!schema || allFilterDefs.length === 0) return
+    if (!schema || remapDefs.length === 0) return
     setActiveFilters((current) =>
       current
         .map((f) => {
-          const next = allFilterDefs.find((d) => d.id === f.def.id)
+          const next = remapDefs.find((d) => d.id === f.def.id)
           return next ? { def: next, value: f.value } : null
         })
         .filter((f): f is ActiveFilter => f !== null),
@@ -198,7 +212,7 @@ export function PlayersExplorer({
       setSorting(sort.map((s: SortSpec) => ({ id: s.field, desc: s.direction === 'desc' })))
       setActiveFilters(
         (filters as FilterCondition[]).map((f) => ({
-          def: allFilterDefs.find((d) => d.field === f.field) ?? {
+          def: remapDefs.find((d) => d.field === f.field) ?? {
             id: f.field, field: f.field, label: f.field, type: 'multi_select' as const, category: 'other', depends_on: [],
           },
           value: f.value,
@@ -207,7 +221,7 @@ export function PlayersExplorer({
     }
     window.addEventListener('load-saved-query', handleLoad as EventListener)
     return () => window.removeEventListener('load-saved-query', handleLoad as EventListener)
-  }, [allFilterDefs])
+  }, [remapDefs])
 
   const totalPages = queryData ? Math.max(1, Math.ceil(queryData.total / PAGE_SIZE)) : 1
 
@@ -228,6 +242,16 @@ export function PlayersExplorer({
 
   return (
     <section className="flex min-w-0 flex-1 flex-col gap-3">
+      {schema ? (
+        <TimeFilter
+          datasetId={datasetId}
+          seasonDef={seasonDef}
+          weekDef={hasWeek ? weekDef : null}
+          activeFilters={activeFilters}
+          onChange={setActiveFilters}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <PositionPills active={positionId} onChange={setPositionId} />
@@ -355,6 +379,7 @@ export function PlayersExplorer({
               }}
               loading={isFetching}
               pinFirstColumn
+              rankOffset={(page - 1) * PAGE_SIZE}
               onRowClick={(row) => {
                 const name = String(row.player_display_name ?? '')
                 if (name) setDetailPlayer(name)

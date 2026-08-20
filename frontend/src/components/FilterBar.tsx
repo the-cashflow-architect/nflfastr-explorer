@@ -58,9 +58,15 @@ export function FilterBar({ datasetId, allDefs, activeFilters, onChange, quickSu
     (s) => !s.filters.every((f) => activeIds.has(f.defId)),
   )
 
+  // Some active filters (season/week) are managed by a dedicated control
+  // elsewhere on the page rather than this bar — allDefs is the source of
+  // truth for what this bar owns, so only show a chip for those.
+  const managedIds = new Set(allDefs.map((d) => d.id))
+  const chipFilters = activeFilters.filter((f) => managedIds.has(f.def.id))
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {activeFilters.map((f) => (
+      {chipFilters.map((f) => (
         <FilterChip
           key={f.def.id}
           datasetId={datasetId}
@@ -105,10 +111,10 @@ export function FilterBar({ datasetId, allDefs, activeFilters, onChange, quickSu
         </>
       ) : null}
 
-      {activeFilters.length > 0 ? (
+      {chipFilters.length > 0 ? (
         <button
           type="button"
-          onClick={() => onChange([])}
+          onClick={() => onChange(activeFilters.filter((f) => !managedIds.has(f.def.id)))}
           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 transition hover:text-white"
         >
           <RotateCcw className="h-3 w-3" />

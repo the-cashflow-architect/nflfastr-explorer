@@ -18,6 +18,7 @@ import { QuickStats } from './QuickStats'
 import { SavedQueriesPanel } from './SavedQueriesPanel'
 import { ShareButton } from './ShareButton'
 import { StatCharts } from './StatCharts'
+import { TimeFilter } from './TimeFilter'
 
 interface PlaysExplorerProps {
   urlState: UrlState | null
@@ -38,9 +39,22 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
   })
 
   // Every filterable field on the dataset, not just the handful the backend
-  // hand-curates: season/team/down/etc. come from the schema, every other
-  // numeric or flag column (yards_gained, epa, touchdown, ...) is generated.
+  // hand-curates: team/down/etc. come from the schema, every other numeric
+  // or flag column (yards_gained, epa, touchdown, ...) is generated. Season
+  // and week get their own always-visible TimeFilter row instead of a
+  // chip, so they're excluded here to avoid showing up twice.
   const allFilterDefs = useMemo(() => {
+    if (!schema) return []
+    const backendDefs = schema.filters.filter((f) => f.id !== 'season' && f.id !== 'week')
+    return buildFilterDefs(schema.columns, backendDefs)
+  }, [schema])
+
+  const seasonDef = schema?.filters.find((f) => f.id === 'season') ?? null
+  const weekDef = schema?.filters.find((f) => f.id === 'week') ?? null
+
+  // The full universe of filter defs, including season/week — used only to
+  // re-point active filters at the right def object on saved-query loads.
+  const remapDefs = useMemo(() => {
     if (!schema) return []
     return buildFilterDefs(schema.columns, schema.filters)
   }, [schema])
@@ -107,7 +121,7 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
       setSorting((sort as SortSpec[]).map((s) => ({ id: s.field, desc: s.direction === 'desc' })))
       setActiveFilters(
         (filters as FilterCondition[]).map((f) => ({
-          def: allFilterDefs.find((d) => d.field === f.field) ?? {
+          def: remapDefs.find((d) => d.field === f.field) ?? {
             id: f.field, field: f.field, label: f.field, type: 'multi_select' as const, category: 'other', depends_on: [],
           },
           value: f.value,
@@ -116,12 +130,22 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
     }
     window.addEventListener('load-saved-query', handleLoad as EventListener)
     return () => window.removeEventListener('load-saved-query', handleLoad as EventListener)
-  }, [allFilterDefs])
+  }, [remapDefs])
 
   const totalPages = queryData ? Math.max(1, Math.ceil(queryData.total / PAGE_SIZE)) : 1
 
   return (
     <section className="flex min-w-0 flex-1 flex-col gap-3">
+      {schema ? (
+        <TimeFilter
+          datasetId={DATASET_ID}
+          seasonDef={seasonDef}
+          weekDef={weekDef}
+          activeFilters={activeFilters}
+          onChange={setActiveFilters}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-white">{schema?.name ?? 'Loading…'}</h2>
@@ -211,6 +235,8 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
                 setPage(1)
               }}
               loading={isFetching}
+              pinFirstColumn
+              rankOffset={(page - 1) * PAGE_SIZE}
             />
           </ExpandablePanel>
 
