@@ -63,7 +63,7 @@ export function Tooltip({ trigger, children }: { trigger: ReactNode; children: R
             <div
               ref={bubbleRef}
               role="tooltip"
-              className="pointer-events-none fixed z-[100] w-72 rounded-xl border border-white/10 bg-slate-900/95 p-3 text-left text-xs font-normal normal-case tracking-normal text-slate-200 shadow-2xl backdrop-blur-md transition-opacity duration-100"
+              className="pointer-events-none fixed z-[100] w-72 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-3 text-left text-xs font-normal normal-case tracking-normal text-slate-200 light:text-slate-700 shadow-2xl backdrop-blur-md transition-opacity duration-100"
               style={{
                 top: pos?.top ?? -9999,
                 left: pos?.left ?? -9999,

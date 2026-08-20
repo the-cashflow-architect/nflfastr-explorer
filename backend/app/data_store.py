@@ -45,12 +45,15 @@ from .models import (
     QueryRequest,
     QueryResponse,
     SortSpec,
+    WeeklyBreakdownRequest,
+    WeeklyBreakdownResponse,
 )
 from .query_builder import (
     build_null_count_sql,
     build_order,
     build_select_columns,
     build_where,
+    quote_identifier,
 )
 
 logger = logging.getLogger(__name__)
@@ -398,6 +401,23 @@ class DataStore:
         with self._state_lock:
             return list(self._columns[table])
 
+    def _records(self, df) -> list[dict[str, Any]]:
+        """Row dicts with nulls as JSON-safe `None`, never float `NaN`.
+
+        `df.where(df.notna(), None)` looks like it does this, but pandas
+        silently coerces `None` back to `NaN` when the target column is
+        float-typed — so a NULL in any numeric column (a common case: a
+        player with no snaps in a stat, or a week a player didn't play)
+        would otherwise reach the client as a bare `NaN` token, which is not
+        valid JSON and fails to parse in the browser.
+        """
+        records = df.to_dict(orient="records")
+        for row in records:
+            for key, value in row.items():
+                if isinstance(value, float) and value != value:  # NaN != NaN
+                    row[key] = None
+        return records
+
     # -- metadata ----------------------------------------------------------
 
     def list_datasets(self) -> list[dict[str, Any]]:
@@ -472,7 +492,7 @@ class DataStore:
             f"SELECT {select_sql} FROM {table}{where_sql}{order_sql} LIMIT ? OFFSET ?"
         )
         rows = self._run(cur, data_sql, params + [req.page_size, offset]).fetchdf()
-        records = rows.where(rows.notna(), None).to_dict(orient="records")
+        records = self._records(rows)
 
         return QueryResponse(
             rows=records,
@@ -556,6 +576,67 @@ class DataStore:
             total_rows=total_count,
             filtered_rows=filtered_count,
             columns=column_stats,
+        )
+
+    def weekly_breakdown(
+        self, dataset_id: str, req: WeeklyBreakdownRequest
+    ) -> WeeklyBreakdownResponse:
+        """One row per group (e.g. per player), one column per week for a
+        chosen stat, and every other requested stat summed across the whole
+        filtered range — the pivot behind the Players page's weekly view.
+        """
+        cfg = self.ensure_loaded(dataset_id)
+        table = cfg.table
+        columns = self._columns_for(table)
+        cur = self._cursor()
+
+        if "week" not in columns:
+            raise ValueError("This dataset has no week column to break out")
+
+        group_cols = [c for c in req.group_columns if c in columns]
+        if not group_cols:
+            raise ValueError("group_columns must reference real columns")
+        if req.weekly_field not in columns:
+            raise ValueError(f"Unknown weekly_field: {req.weekly_field}")
+        agg_cols = [
+            c
+            for c in req.agg_columns
+            if c in columns and c not in group_cols and c not in ("week", req.weekly_field)
+        ]
+
+        where_sql, params = build_where(req.filters)
+
+        weeks_sql = f'SELECT DISTINCT "week" FROM {table}{where_sql} ORDER BY "week"'
+        weeks = [int(row[0]) for row in self._run(cur, weeks_sql, params).fetchall() if row[0] is not None]
+        if not weeks:
+            return WeeklyBreakdownResponse(rows=[], weeks=[], total=0, page=req.page, page_size=req.page_size)
+
+        group_sql = ", ".join(quote_identifier(c) for c in group_cols)
+        weekly_field_q = quote_identifier(req.weekly_field)
+        week_aliases = [f"week_{w}" for w in weeks]
+        week_exprs = [
+            f'SUM(CASE WHEN "week" = {w} THEN {weekly_field_q} END) AS "{alias}"'
+            for w, alias in zip(weeks, week_aliases)
+        ]
+        agg_exprs = [f"SUM({quote_identifier(c)}) AS {quote_identifier(c)}" for c in agg_cols]
+        select_sql = ", ".join([group_sql] + week_exprs + agg_exprs)
+
+        valid_sort_fields = set(group_cols) | set(agg_cols) | set(week_aliases)
+        sort = [s for s in req.sort if s.field in valid_sort_fields]
+        order_sql = build_order(sort)
+
+        count_sql = f"SELECT COUNT(*) FROM (SELECT {group_sql} FROM {table}{where_sql} GROUP BY {group_sql}) t"
+        total = int(self._run(cur, count_sql, params).fetchone()[0])
+
+        offset = (req.page - 1) * req.page_size
+        data_sql = (
+            f"SELECT {select_sql} FROM {table}{where_sql} GROUP BY {group_sql}{order_sql} LIMIT ? OFFSET ?"
+        )
+        rows = self._run(cur, data_sql, params + [req.page_size, offset]).fetchdf()
+        records = self._records(rows)
+
+        return WeeklyBreakdownResponse(
+            rows=records, weeks=weeks, total=total, page=req.page, page_size=req.page_size,
         )
 
     # -- export ------------------------------------------------------------

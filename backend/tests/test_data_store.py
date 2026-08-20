@@ -171,6 +171,53 @@ def test_query_rejects_injection_in_sort(store):
         store.query("player_weekly", req)
 
 
+def test_weekly_breakdown_pivots_one_stat_by_week(store):
+    from app.models import SortSpec, WeeklyBreakdownRequest
+
+    req = WeeklyBreakdownRequest(
+        filters=[FilterCondition(field="season", operator=FilterOperator.in_, value=[2025])],
+        group_columns=["player_display_name"],
+        weekly_field="passing_yards",
+        # Requesting the weekly field again as an agg column should be a
+        # no-op, not double-counted or summed as a flat total.
+        agg_columns=["passing_yards"],
+        sort=[SortSpec(field="player_display_name", direction="asc")],
+        page=1,
+        page_size=50,
+    )
+    resp = store.weekly_breakdown("player_weekly", req)
+
+    assert resp.weeks
+    # season alternates 2024/2025 by row index in the fixture, and
+    # player_display_name cycles through 10 names — filtering to one season
+    # only ever sees half the rows, i.e. 5 of the 10 names.
+    assert resp.total == 5
+    row = resp.rows[0]
+    for w in resp.weeks:
+        assert f"week_{w}" in row
+    assert "passing_yards" not in row
+    # a week with no data for this player must come through as JSON-safe
+    # None, never a bare NaN (which is not valid JSON).
+    assert all(v is None or isinstance(v, (int, float)) for v in row.values() if v != row["player_display_name"])
+    assert not any(isinstance(v, float) and v != v for v in row.values())
+
+
+def test_weekly_breakdown_rejects_unknown_weekly_field(store):
+    from app.models import WeeklyBreakdownRequest
+
+    req = WeeklyBreakdownRequest(group_columns=["player_display_name"], weekly_field="not_a_real_column")
+    with pytest.raises(ValueError):
+        store.weekly_breakdown("player_weekly", req)
+
+
+def test_weekly_breakdown_rejects_empty_group_columns(store):
+    from app.models import WeeklyBreakdownRequest
+
+    req = WeeklyBreakdownRequest(group_columns=["not_a_real_column"], weekly_field="passing_yards")
+    with pytest.raises(ValueError):
+        store.weekly_breakdown("player_weekly", req)
+
+
 def test_stale_persisted_table_is_refreshed(store_factory, monkeypatch):
     """A persisted file must not pin the app to a months-old nflverse copy."""
     import app.data_store as ds

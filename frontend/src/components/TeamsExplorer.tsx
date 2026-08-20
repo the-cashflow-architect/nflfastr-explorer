@@ -161,11 +161,11 @@ export function TeamsExplorer({ navOpts, onDrillToTeam }: TeamsExplorerProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+        <div className="flex items-center gap-1 rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white p-1">
           <button
             type="button"
             onClick={() => setMode('offense')}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${mode === 'offense' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${mode === 'offense' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-300 light:text-slate-600 hover:text-white hover:bg-white/5'}`}
           >
             <Target className="h-4 w-4" />
             Offense
@@ -173,7 +173,7 @@ export function TeamsExplorer({ navOpts, onDrillToTeam }: TeamsExplorerProps) {
           <button
             type="button"
             onClick={() => setMode('defense')}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${mode === 'defense' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition ${mode === 'defense' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-300 light:text-slate-600 hover:text-white hover:bg-white/5'}`}
           >
             <Shield className="h-4 w-4" />
             Defense
@@ -184,7 +184,7 @@ export function TeamsExplorer({ navOpts, onDrillToTeam }: TeamsExplorerProps) {
           <select
             value={season ?? ''}
             onChange={(e) => setSeason(Number(e.target.value))}
-            className="rounded-lg border border-white/10 bg-slate-900/70 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+            className="rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-1.5 text-sm text-slate-100 light:text-slate-800 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
           >
             {seasons.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -210,7 +210,7 @@ export function TeamsExplorer({ navOpts, onDrillToTeam }: TeamsExplorerProps) {
 
       <ExpandablePanel title={mode === 'offense' ? 'Team Offense' : 'Team Defense'} className="flex-1 min-h-0">
         {season == null || !schema ? (
-          <div className="flex h-64 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/30">
+          <div className="flex h-64 items-center justify-center rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/30 light:bg-slate-100/70">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
           </div>
         ) : (

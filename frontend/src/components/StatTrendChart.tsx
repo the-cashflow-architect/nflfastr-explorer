@@ -34,11 +34,11 @@ export function StatTrendChart({ data, xField, yField, columnMeta, playerName }:
   const xDomain = isNumericX ? ['auto', 'auto'] : chartData.map((d) => String(d.x))
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 transition-all duration-200">
+    <div className="rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white p-4 transition-all duration-200">
       <div className="mb-3">
-        <h4 className="font-semibold text-white flex items-center gap-2">
+        <h4 className="font-semibold text-white light:text-slate-900 flex items-center gap-2">
           {columnMeta.label} Trend
-          {playerName && <span className="text-slate-400 text-sm">— {playerName}</span>}
+          {playerName && <span className="text-slate-400 light:text-slate-500 text-sm">— {playerName}</span>}
         </h4>
         <p className="text-xs text-slate-500">{columnMeta.description}</p>
       </div>
@@ -128,11 +128,11 @@ export function MultiStatTrend({ data, xField, yFields, columnsMeta, playerName 
   const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#ec4899']
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 transition-all duration-200">
+    <div className="rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white p-4 transition-all duration-200">
       <div className="mb-3">
-        <h4 className="font-semibold text-white flex items-center gap-2">
+        <h4 className="font-semibold text-white light:text-slate-900 flex items-center gap-2">
           Stat Trends
-          {playerName && <span className="text-slate-400 text-sm">— {playerName}</span>}
+          {playerName && <span className="text-slate-400 light:text-slate-500 text-sm">— {playerName}</span>}
         </h4>
         <div className="flex flex-wrap gap-3 mt-2">
           {yFields.map((field, idx) => {

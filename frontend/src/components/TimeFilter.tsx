@@ -102,9 +102,9 @@ export function TimeFilter({ datasetId, seasonDef, weekDef, activeFilters, onCha
   const toggleWeek = makeToggle(sortedWeeks, selectedWeeks, setWeeks, lastWeekClicked, setLastWeekClicked)
 
   return (
-    <div className="flex flex-wrap items-start gap-x-6 gap-y-2 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3">
+    <div className="flex flex-wrap items-start gap-x-6 gap-y-2 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Season</span>
+        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500">Season</span>
         {sortedSeasons.map((s) => {
           const active = selectedSeasons.some((v) => String(v) === String(s))
           return (
@@ -114,8 +114,8 @@ export function TimeFilter({ datasetId, seasonDef, weekDef, activeFilters, onCha
               onClick={(e) => toggleSeason(s, e.shiftKey)}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
                 active
-                  ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/40'
-                  : 'bg-slate-800/80 text-slate-300 ring-1 ring-white/5 hover:bg-slate-700/80'
+                  ? 'bg-blue-500/20 text-blue-100 light:text-blue-700 ring-1 ring-blue-400/40'
+                  : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
               }`}
             >
               {String(s)}
@@ -132,7 +132,7 @@ export function TimeFilter({ datasetId, seasonDef, weekDef, activeFilters, onCha
 
       {weekDef ? (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Week</span>
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500">Week</span>
           {sortedWeeks.map((w) => {
             const active = selectedWeeks.some((v) => String(v) === String(w))
             return (
@@ -142,8 +142,8 @@ export function TimeFilter({ datasetId, seasonDef, weekDef, activeFilters, onCha
                 onClick={(e) => toggleWeek(w, e.shiftKey)}
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-medium transition-all ${
                   active
-                    ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/40'
-                    : 'bg-slate-800/80 text-slate-300 ring-1 ring-white/5 hover:bg-slate-700/80'
+                    ? 'bg-blue-500/20 text-blue-100 light:text-blue-700 ring-1 ring-blue-400/40'
+                    : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
                 }`}
               >
                 {String(w)}

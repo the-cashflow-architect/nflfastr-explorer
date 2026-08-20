@@ -148,8 +148,8 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">{schema?.name ?? 'Loading…'}</h2>
-          <p className="text-xs text-slate-400">{schema?.description}</p>
+          <h2 className="text-base font-semibold text-white light:text-slate-900">{schema?.name ?? 'Loading…'}</h2>
+          <p className="text-xs text-slate-400 light:text-slate-500">{schema?.description}</p>
         </div>
         <div className="flex items-center gap-2">
           {schema ? (
@@ -165,7 +165,7 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
             <button
               type="button"
               onClick={() => setSavedOpen((o) => !o)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white px-3 py-2 text-sm text-slate-200 light:text-slate-700 transition hover:bg-slate-800/80"
             >
               <Bookmark className="h-4 w-4" />
               Saved
@@ -173,7 +173,7 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
             {savedOpen ? (
               <>
                 <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={() => setSavedOpen(false)} />
-                <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur-xl">
+                <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-1 shadow-2xl backdrop-blur-xl">
                   <SavedQueriesPanel
                     datasetId={DATASET_ID}
                     sorting={sortSpec}
@@ -190,11 +190,11 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
               <ShareButton getShareableUrl={getShareableUrl} currentState={shareState} />
             </>
           ) : null}
-          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
-            <button type="button" onClick={() => setChartView(false)} className={`rounded-md p-1.5 transition ${!chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`} title="Table">
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white p-1">
+            <button type="button" onClick={() => setChartView(false)} className={`rounded-md p-1.5 transition ${!chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 light:text-slate-500 hover:text-white'}`} title="Table">
               <Table2 className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => setChartView(true)} className={`rounded-md p-1.5 transition ${chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`} title="Chart">
+            <button type="button" onClick={() => setChartView(true)} className={`rounded-md p-1.5 transition ${chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 light:text-slate-500 hover:text-white'}`} title="Chart">
               <BarChart2 className="h-4 w-4" />
             </button>
           </div>
@@ -214,10 +214,10 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
       {queryError && <ErrorBanner error={queryError} />}
 
       {schemaLoading || !schema ? (
-        <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/30">
+        <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/30 light:bg-slate-100/70">
           <div className="text-center">
             <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
-            <p className="text-sm text-slate-400">Loading play-by-play data…</p>
+            <p className="text-sm text-slate-400 light:text-slate-500">Loading play-by-play data…</p>
           </div>
         </div>
       ) : chartView ? (
@@ -243,14 +243,14 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
           {queryData && <DataQualityIndicator datasetId={DATASET_ID} filters={filterConditions} totalRows={queryData.total} />}
           {queryData && <QuickStats rows={queryData.rows} columns={queryData.columns} />}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-sm">
-            <span className="text-slate-400">{queryData ? `${queryData.total.toLocaleString()} matching rows` : '—'}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white px-4 py-3 text-sm">
+            <span className="text-slate-400 light:text-slate-500">{queryData ? `${queryData.total.toLocaleString()} matching rows` : '—'}</span>
             <div className="flex items-center gap-2">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-white/10 light:border-slate-200 px-3 py-1.5 text-slate-300 light:text-slate-600 transition hover:bg-white/5 disabled:opacity-40">
                 Previous
               </button>
-              <span className="text-slate-400">Page {page} of {totalPages}</span>
-              <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
+              <span className="text-slate-400 light:text-slate-500">Page {page} of {totalPages}</span>
+              <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-white/10 light:border-slate-200 px-3 py-1.5 text-slate-300 light:text-slate-600 transition hover:bg-white/5 disabled:opacity-40">
                 Next
               </button>
             </div>

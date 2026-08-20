@@ -103,3 +103,26 @@ class DataQualityResponse(BaseModel):
     total_rows: int
     filtered_rows: int
     columns: list[dict[str, Any]]
+
+
+class WeeklyBreakdownRequest(BaseModel):
+    filters: list[FilterCondition] = Field(default_factory=list)
+    # Identity columns kept as one row per group, e.g. player name/team/season.
+    group_columns: list[str]
+    # The one stat broken out into a column per week.
+    weekly_field: str
+    # Other visible stat columns, summed across the whole filtered range.
+    agg_columns: list[str] = Field(default_factory=list)
+    sort: list[SortSpec] = Field(default_factory=list)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=500)
+
+
+class WeeklyBreakdownResponse(BaseModel):
+    rows: list[dict[str, Any]]
+    # The weeks actually present in the filtered data, in order — each one
+    # became a "week_{n}" column in every row.
+    weeks: list[int]
+    total: int
+    page: int
+    page_size: int

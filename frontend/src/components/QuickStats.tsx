@@ -81,12 +81,12 @@ export function QuickStats({ rows, columns }: QuickStatsProps) {
       {computedStats.map((stat) => (
          <div
           key={stat.id}
-          className="group rounded-xl border border-white/10 bg-slate-900/40 p-3 text-center transition-all duration-200 hover:bg-slate-900/60 hover:shadow-lg hover:shadow-black/20"
+          className="group rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white p-3 text-center transition-all duration-200 hover:bg-slate-900/60 hover:shadow-lg hover:shadow-black/20"
         >
           <div className={`mb-1 inline-flex items-center justify-center ${COLORS[stat.color ?? 'blue']}`}>
             {stat.icon}
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-2xl font-bold text-white light:text-slate-900">
             {stat.value != null ? formatNumber(stat.value) : '—'}
           </p>
           <p className="text-[11px] text-slate-500">{stat.label}</p>

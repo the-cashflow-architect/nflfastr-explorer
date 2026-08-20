@@ -20,7 +20,7 @@ export function StatTabs({ active, onChange, advancedDisabled, advancedDisabledR
   const order: StatTab[] = ['basic', 'advanced', 'fantasy', 'custom']
 
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+    <div className="flex items-center gap-1 rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white p-1">
       {order.map((tab, idx) => {
         const disabled = tab === 'advanced' && advancedDisabled
         const isLast = idx === order.length - 1
@@ -36,10 +36,10 @@ export function StatTabs({ active, onChange, advancedDisabled, advancedDisabledR
                 disabled
                   ? 'cursor-not-allowed text-slate-600'
                   : active === tab
-                    ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
+                    ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
                     : tab === 'fantasy'
                       ? 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      : 'text-slate-300 light:text-slate-600 hover:text-white hover:bg-white/5'
               }`}
             >
               {STAT_TAB_LABELS[tab]}

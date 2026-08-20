@@ -8,6 +8,7 @@ import { KeyboardShortcutHelp } from './components/KeyboardShortcutHelp'
 import { PlayersExplorer } from './components/PlayersExplorer'
 import { PlaysExplorer } from './components/PlaysExplorer'
 import { TeamsExplorer } from './components/TeamsExplorer'
+import { ThemeToggle } from './components/ThemeToggle'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useUrlState, type Route } from './hooks/useUrlState'
 
@@ -79,24 +80,25 @@ function ExplorerApp() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
+      <header className="border-b border-white/10 light:border-slate-200 bg-slate-950/70 light:bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 lg:px-6">
           <button type="button" onClick={goHome} className="flex items-center gap-3 text-left">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 shadow-lg shadow-blue-500/20">
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-white">nflfastR Explorer</h1>
-              <p className="text-xs text-slate-400">nflverse data · smart filters · stat glossary</p>
+              <h1 className="text-lg font-bold tracking-tight text-white light:text-slate-900">nflfastR Explorer</h1>
+              <p className="text-xs text-slate-400 light:text-slate-500">nflverse data · smart filters · stat glossary</p>
             </div>
           </button>
-          <div className="hidden items-center gap-4 text-xs text-slate-400 md:flex">
+          <div className="hidden items-center gap-4 text-xs text-slate-400 light:text-slate-500 md:flex">
             <span className="inline-flex items-center gap-1.5">
               <Activity className="h-3.5 w-3.5 text-emerald-400" />
               Live nflverse
             </span>
             <KeyboardShortcutHelp />
           </div>
+          <ThemeToggle />
         </div>
         {route !== 'home' ? (
           <div className="mx-auto max-w-[1600px] px-4 pb-3 lg:px-6">
