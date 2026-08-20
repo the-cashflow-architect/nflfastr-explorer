@@ -97,6 +97,32 @@ export function checkHealth() {
   return request<{ status: string }>('/api/health')
 }
 
+export interface WeeklyBreakdownResponse {
+  rows: Record<string, unknown>[]
+  weeks: number[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export function fetchWeeklyBreakdown(
+  datasetId: string,
+  body: {
+    filters: FilterCondition[]
+    group_columns: string[]
+    weekly_field: string
+    agg_columns: string[]
+    sort: SortSpec[]
+    page: number
+    page_size: number
+  },
+) {
+  return request<WeeklyBreakdownResponse>(`/api/datasets/${datasetId}/weekly-breakdown`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function fetchDataQuality(
   datasetId: string,
   body: {

@@ -17,8 +17,8 @@ export function PositionPills({ active, onChange }: PositionPillsProps) {
           title={pill.hint}
           className={`rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-150 ${
             active === pill.id
-              ? 'bg-blue-500/20 text-blue-100 ring-1 ring-blue-400/40 shadow-sm shadow-blue-500/10'
-              : 'bg-slate-900/50 text-slate-300 ring-1 ring-white/5 hover:bg-slate-800/80 hover:ring-white/10'
+              ? 'bg-blue-500/20 text-blue-100 light:text-blue-700 ring-1 ring-blue-400/40 shadow-sm shadow-blue-500/10'
+              : 'bg-slate-900/50 light:bg-white text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-800/80 hover:ring-white/10'
           }`}
         >
           {pill.label}

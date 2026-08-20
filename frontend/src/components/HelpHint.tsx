@@ -9,8 +9,8 @@ export function HelpHint({ text, title }: { text: string; title?: string }) {
         <Info className="h-3.5 w-3.5 text-slate-500 transition-colors hover:text-blue-400" />
       }
     >
-      {title ? <span className="mb-1 block text-sm font-semibold text-white">{title}</span> : null}
-      <span className="block leading-relaxed text-slate-300">{text}</span>
+      {title ? <span className="mb-1 block text-sm font-semibold text-white light:text-slate-900">{title}</span> : null}
+      <span className="block leading-relaxed text-slate-300 light:text-slate-600">{text}</span>
     </Tooltip>
   )
 }

@@ -23,7 +23,7 @@ export function DataQualityIndicator({ datasetId, filters, totalRows }: DataQual
   const lowSample = qualityData.filtered_rows < 30
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/50 px-4 py-3 text-sm">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white px-4 py-3 text-sm">
       <div className="flex items-center gap-4">
         <div className="inline-flex items-center gap-2">
           <ShieldCheck className={`h-4 w-4 ${lowSample ? 'text-red-400' : 'text-emerald-400'}`} />
@@ -33,7 +33,7 @@ export function DataQualityIndicator({ datasetId, filters, totalRows }: DataQual
         </div>
         <div className="inline-flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-slate-500" />
-          <span className="text-slate-400">
+          <span className="text-slate-400 light:text-slate-500">
             {sampleSizePct.toFixed(1)}% of dataset
           </span>
         </div>

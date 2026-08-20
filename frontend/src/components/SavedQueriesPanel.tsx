@@ -45,15 +45,15 @@ export function SavedQueriesPanel({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/50 p-4">
+    <div className="rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-white light:text-slate-900 flex items-center gap-2">
           <FolderOpen className="h-5 w-5" />
           Saved Queries
         </h3>
         <button
           onClick={() => setShowSaveDialog(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-200 ring-1 ring-blue-400/40 hover:bg-blue-500/30 transition"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40 hover:bg-blue-500/30 transition"
         >
           <Save className="h-4 w-4" />
           Save Current
@@ -69,10 +69,10 @@ export function SavedQueriesPanel({
           {datasetQueries.map((query) => (
              <div
               key={query.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.03]"
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 light:border-slate-200 bg-slate-950/40 light:bg-white/60 px-3 py-2.5 transition-all duration-200 hover:bg-white/[0.03]"
             >
               <div className="flex-1 min-w-0" onClick={() => handleLoad(query)}>
-                <p className="text-sm font-medium text-white truncate">{query.name}</p>
+                <p className="text-sm font-medium text-white light:text-slate-900 truncate">{query.name}</p>
                 <p className="text-[11px] text-slate-500">
                   {query.filters.length} filters, {query.visibleColumns.length} columns ·{' '}
                   {new Date(query.createdAt).toLocaleDateString()}
@@ -94,9 +94,9 @@ export function SavedQueriesPanel({
 
       {showSaveDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-4 shadow-2xl backdrop-blur-xl">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-white">Save Query</h4>
+              <h4 className="font-semibold text-white light:text-slate-900">Save Query</h4>
               <button
                 onClick={() => setShowSaveDialog(false)}
                 className="rounded p-1 text-slate-500 hover:bg-white/5 hover:text-white transition"
@@ -109,20 +109,20 @@ export function SavedQueriesPanel({
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               placeholder="Enter a name for this query"
-              className="w-full rounded-lg border border-white/10 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20 mb-4"
+              className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-800/70 light:bg-slate-100 px-3 py-2 text-sm text-slate-100 light:text-slate-800 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20 mb-4"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowSaveDialog(false)}
-                className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5"
+                className="rounded-lg border border-white/10 light:border-slate-200 px-3 py-2 text-sm text-slate-300 light:text-slate-600 transition hover:bg-white/5"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-2 text-sm font-medium text-blue-200 ring-1 ring-blue-400/40 hover:bg-blue-500/30 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/20 px-3 py-2 text-sm font-medium text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40 hover:bg-blue-500/30 transition"
               >
                 <Save className="h-4 w-4" />
                 Save

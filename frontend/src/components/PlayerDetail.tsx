@@ -150,10 +150,10 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
 
   if (playerLoading || !playerData) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/30">
+      <div className="flex h-64 items-center justify-center rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/30 light:bg-slate-100/70">
         <div className="text-center">
           <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
-          <p className="text-sm text-slate-400">Loading player data…</p>
+          <p className="text-sm text-slate-400 light:text-slate-500">Loading player data…</p>
         </div>
       </div>
     )
@@ -161,25 +161,25 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-6">
+      <div className="rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white p-6">
         <div className="flex items-start gap-4">
           {headshotUrl ? (
             <img
               src={headshotUrl}
               alt=""
-              className="h-16 w-16 rounded-xl bg-slate-800 object-cover shadow-lg"
+              className="h-16 w-16 rounded-xl bg-slate-800 light:bg-slate-100 object-cover shadow-lg"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
               }}
             />
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 shadow-lg shadow-blue-500/20">
-              <User className="h-8 w-8 text-white" />
+              <User className="h-8 w-8 text-white light:text-slate-900" />
             </div>
           )}
           <div>
-            <h2 className="text-2xl font-bold text-white">{playerName}</h2>
-            <div className="mt-1 flex flex-wrap gap-4 text-sm text-slate-400">
+            <h2 className="text-2xl font-bold text-white light:text-slate-900">{playerName}</h2>
+            <div className="mt-1 flex flex-wrap gap-4 text-sm text-slate-400 light:text-slate-500">
               {position ? <span>{position}{latestTeam ? ` · ${latestTeam}` : ''}</span> : null}
               {totalGames ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -197,16 +197,16 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
       </div>
 
       {seasonAggregates.length > 0 && relevantStats.length > 0 && (
-        <ExpandablePanel title="Season Summary" className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Season Summary</h3>
+        <ExpandablePanel title="Season Summary" className="rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500">Season Summary</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-white/10">
-                  <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-white/10 light:border-slate-200">
+                  <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500">
                     Season
                   </th>
-                  <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500">
                     Games
                   </th>
                   {relevantStats.map((stat) => {
@@ -214,7 +214,7 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
                     return (
                       <th
                         key={stat}
-                        className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400"
+                        className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400 light:text-slate-500"
                       >
                         {meta?.label ?? stat}
                       </th>
@@ -224,17 +224,17 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
               </thead>
               <tbody>
                 {seasonAggregates.map((season) => (
-                  <tr key={String(season.season)} className="border-b border-white/5">
-                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-200">
+                  <tr key={String(season.season)} className="border-b border-white/5 light:border-slate-200">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-200 light:text-slate-700">
                       {season.season}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300 light:text-slate-600">
                       {season.games}
                     </td>
                     {relevantStats.map((stat) => {
                       const meta = schema.columns.find((c) => c.id === stat)
                       return (
-                        <td key={stat} className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300">
+                        <td key={stat} className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300 light:text-slate-600">
                           {season[stat] != null ? formatCell(season[stat], stat, meta?.category) : '—'}
                         </td>
                       )
@@ -252,7 +252,7 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
           <select
             value={effectiveSelectedStat}
             onChange={(e) => setSelectedStat(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-2 text-sm text-slate-100 light:text-slate-800 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
           >
             {numericByCategory.map(([category, stats]) => (
               <optgroup key={category} label={FILTER_CATEGORIES[category] ?? category}>
@@ -298,8 +298,8 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
                 }}
                 className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
                   effectiveCompareStats.includes(stat.id)
-                    ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
-                    : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'
+                    ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
+                    : 'border-white/10 light:border-slate-200 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 {stat.label}

@@ -32,21 +32,21 @@ export function ExpandablePanel({ title, children, className }: ExpandablePanelP
         onClick={() => setExpanded(true)}
         aria-label={`Expand ${title}`}
         title="Expand"
-        className="absolute right-2 top-2 z-10 rounded-lg border border-white/10 bg-slate-900/70 p-1.5 text-slate-400 opacity-0 backdrop-blur transition-all duration-150 hover:bg-slate-800 hover:text-white group-hover:opacity-100 focus-visible:opacity-100"
+        className="absolute right-2 top-2 z-10 rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white p-1.5 text-slate-400 light:text-slate-500 opacity-0 backdrop-blur transition-all duration-150 hover:bg-slate-800 hover:text-white group-hover:opacity-100 focus-visible:opacity-100"
       >
         <Maximize2 className="h-3.5 w-3.5" />
       </button>
       {children}
       {expanded
         ? createPortal(
-            <div className="fixed inset-0 z-[90] flex flex-col bg-slate-950/90 backdrop-blur-sm">
-              <div className="flex items-center justify-between border-b border-white/10 bg-slate-900/80 px-5 py-3">
-                <h3 className="text-sm font-semibold text-white">{title}</h3>
+            <div className="fixed inset-0 z-[90] flex flex-col bg-slate-950/90 light:bg-white/90 backdrop-blur-sm">
+              <div className="flex items-center justify-between border-b border-white/10 light:border-slate-200 bg-slate-900/80 light:bg-white/90 px-5 py-3">
+                <h3 className="text-sm font-semibold text-white light:text-slate-900">{title}</h3>
                 <button
                   type="button"
                   onClick={() => setExpanded(false)}
                   aria-label="Close"
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
+                  className="rounded-lg p-1.5 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white"
                 >
                   <X className="h-5 w-5" />
                 </button>

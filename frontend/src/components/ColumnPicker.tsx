@@ -63,7 +63,7 @@ export function ColumnPicker({ allColumns, selected, onChange, open: openProp, o
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80"
+        className="inline-flex items-center gap-2 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white px-3 py-2 text-sm text-slate-200 light:text-slate-700 transition hover:bg-slate-800/80"
       >
         <Columns3 className="h-4 w-4" />
         Columns ({selected.length})
@@ -76,7 +76,7 @@ export function ColumnPicker({ allColumns, selected, onChange, open: openProp, o
             aria-label="Close column picker"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 z-50 mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div className="absolute right-0 z-50 mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
             <div className="relative mb-3">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
               <input
@@ -84,7 +84,7 @@ export function ColumnPicker({ allColumns, selected, onChange, open: openProp, o
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search stats…"
-                className="w-full rounded-lg border border-white/10 bg-slate-950/60 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-950/60 light:bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-100 light:text-slate-800 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
             {grouped.length === 0 ? (
@@ -109,7 +109,7 @@ export function ColumnPicker({ allColumns, selected, onChange, open: openProp, o
                             className="mt-0.5"
                           />
                           <span>
-                            <span className="block text-sm text-slate-200">{col.label}</span>
+                            <span className="block text-sm text-slate-200 light:text-slate-700">{col.label}</span>
                             <span className="block text-[11px] text-slate-500 line-clamp-1">
                               {col.description}
                             </span>

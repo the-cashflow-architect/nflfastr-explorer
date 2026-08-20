@@ -8,7 +8,7 @@ export interface Crumb {
 
 export function Breadcrumb({ trail }: { trail: Crumb[] }) {
   return (
-    <nav className="flex items-center gap-1.5 text-sm text-slate-400" aria-label="Breadcrumb">
+    <nav className="flex items-center gap-1.5 text-sm text-slate-400 light:text-slate-500" aria-label="Breadcrumb">
       {trail.map((crumb, idx): ReactNode => {
         const isLast = idx === trail.length - 1
         return (
@@ -23,7 +23,7 @@ export function Breadcrumb({ trail }: { trail: Crumb[] }) {
                 {crumb.label}
               </button>
             ) : (
-              <span className={isLast ? 'font-medium text-white' : ''}>{crumb.label}</span>
+              <span className={isLast ? 'font-medium text-white light:text-slate-900' : ''}>{crumb.label}</span>
             )}
             {!isLast ? <ChevronRight className="h-3.5 w-3.5 text-slate-600" /> : null}
           </span>

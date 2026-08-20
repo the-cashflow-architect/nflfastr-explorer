@@ -11,7 +11,7 @@ const BOOLEAN_FLAG_FIELDS = new Set([
 
 const NUMERIC_DTYPE_MARKERS = ['INT', 'FLOAT', 'DOUBLE', 'DECIMAL']
 
-function isNumeric(c: ColumnMeta): boolean {
+export function isNumeric(c: ColumnMeta): boolean {
   return NUMERIC_DTYPE_MARKERS.some((t) => c.dtype.includes(t))
 }
 

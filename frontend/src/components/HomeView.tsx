@@ -34,8 +34,8 @@ export function HomeView({ datasets, onNavigate }: HomeViewProps) {
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-10 lg:px-6">
       <div className="mb-10 text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">nflfastR Explorer</h1>
-        <p className="mx-auto mt-3 max-w-xl text-slate-400">
+        <h1 className="text-3xl font-bold tracking-tight text-white light:text-slate-900 sm:text-4xl">nflfastR Explorer</h1>
+        <p className="mx-auto mt-3 max-w-xl text-slate-400 light:text-slate-500">
           Player box scores, team totals, and play-by-play data from nflverse — 2022 to today.
         </p>
       </div>
@@ -72,7 +72,7 @@ export function HomeView({ datasets, onNavigate }: HomeViewProps) {
               key={link.label}
               type="button"
               onClick={() => onNavigate(link.route, link.opts)}
-              className="rounded-xl border border-white/10 bg-slate-900/50 px-4 py-2.5 text-sm font-medium text-slate-200 transition-all duration-150 hover:bg-slate-800/80 hover:ring-1 hover:ring-blue-400/30"
+              className="rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white px-4 py-2.5 text-sm font-medium text-slate-200 light:text-slate-700 transition-all duration-150 hover:bg-slate-800/80 hover:ring-1 hover:ring-blue-400/30"
             >
               {link.label}
             </button>
@@ -89,7 +89,7 @@ export function HomeView({ datasets, onNavigate }: HomeViewProps) {
               type="button"
               title={TEAM_NAMES[code]}
               onClick={() => onNavigate('players', { team: code, position: 'all', statTab: 'basic' })}
-              className="rounded-lg border border-white/10 bg-slate-900/40 py-2.5 text-center text-xs font-semibold text-slate-300 transition-all duration-150 hover:bg-slate-800/80 hover:text-white hover:ring-1 hover:ring-blue-400/30"
+              className="rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/40 light:bg-white py-2.5 text-center text-xs font-semibold text-slate-300 light:text-slate-600 transition-all duration-150 hover:bg-slate-800/80 hover:text-white hover:ring-1 hover:ring-blue-400/30"
             >
               {code}
             </button>
@@ -117,16 +117,16 @@ function HomeCard({
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col items-start rounded-2xl border border-white/10 bg-slate-900/50 p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-900/70 hover:shadow-xl hover:shadow-black/20 hover:ring-1 hover:ring-blue-400/30"
+      className="group flex flex-col items-start rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/50 light:bg-white p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-900/70 hover:shadow-xl hover:shadow-black/20 hover:ring-1 hover:ring-blue-400/30"
     >
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 text-white shadow-lg shadow-blue-500/20">
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 text-white light:text-slate-900 shadow-lg shadow-blue-500/20">
         {icon}
       </div>
-      <h3 className="flex items-center gap-1.5 text-lg font-semibold text-white">
+      <h3 className="flex items-center gap-1.5 text-lg font-semibold text-white light:text-slate-900">
         {title}
         <ChevronRight className="h-4 w-4 text-slate-500 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-blue-400" />
       </h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{description}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-slate-400 light:text-slate-500">{description}</p>
       <span className="mt-4 text-xs font-medium text-slate-500">{meta}</span>
     </button>
   )

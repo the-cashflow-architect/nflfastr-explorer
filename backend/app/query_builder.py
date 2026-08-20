@@ -14,6 +14,12 @@ def _quote_identifier(name: str) -> str:
     return f'"{name}"'
 
 
+# Public alias — the weekly-breakdown query needs to quote identifiers it
+# builds itself (group/agg columns, week aliases), not just ones this module
+# already handles internally.
+quote_identifier = _quote_identifier
+
+
 def build_where(filters: list[FilterCondition]) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []

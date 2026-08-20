@@ -43,8 +43,8 @@ export function MultiSelectEditor({ datasetId, def, value, siblingFilters, onCha
               onClick={() => toggle(option)}
               className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
                 active
-                  ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
-                  : 'bg-slate-800/80 text-slate-300 ring-1 ring-white/5 hover:bg-slate-700/80'
+                  ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
+                  : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
               }`}
             >
               {String(option)}
@@ -90,7 +90,7 @@ export function SearchEditor({ datasetId, def, value, siblingFilters, onChange }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={`Search ${def.label.toLowerCase()}…`}
-          className="w-full rounded-lg border border-white/10 bg-slate-900/70 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none ring-blue-500/0 transition focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white py-2 pl-9 pr-3 text-sm text-slate-100 light:text-slate-800 outline-none ring-blue-500/0 transition focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
         />
       </div>
       {data?.options?.length ? (
@@ -103,7 +103,7 @@ export function SearchEditor({ datasetId, def, value, siblingFilters, onChange }
                 setSearch(String(option))
                 onChange(String(option))
               }}
-              className="rounded-md bg-slate-800/80 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
+              className="rounded-md bg-slate-800/80 light:bg-slate-100 px-2 py-1 text-xs text-slate-300 light:text-slate-600 hover:bg-slate-700"
             >
               {String(option)}
             </button>
@@ -127,7 +127,7 @@ export function RangeEditor({ value, onChange }: Omit<EditorProps, 'datasetId' |
           placeholder="Min"
           value={range.min ?? ''}
           onChange={(e) => onChange({ ...range, min: e.target.value === '' ? null : Number(e.target.value) })}
-          className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
         />
       </label>
       <label className="space-y-1">
@@ -137,7 +137,7 @@ export function RangeEditor({ value, onChange }: Omit<EditorProps, 'datasetId' |
           placeholder="Max"
           value={range.max ?? ''}
           onChange={(e) => onChange({ ...range, max: e.target.value === '' ? null : Number(e.target.value) })}
-          className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
         />
       </label>
     </div>
@@ -151,7 +151,7 @@ export function BooleanEditor({ value, onChange }: Omit<EditorProps, 'datasetId'
         type="button"
         onClick={() => onChange(true)}
         className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-          value === true ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40' : 'bg-slate-800/80 text-slate-300 ring-1 ring-white/5 hover:bg-slate-700/80'
+          value === true ? 'bg-emerald-500/20 text-emerald-200 light:text-emerald-700 ring-1 ring-emerald-400/40' : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
         }`}
       >
         Yes
@@ -160,7 +160,7 @@ export function BooleanEditor({ value, onChange }: Omit<EditorProps, 'datasetId'
         type="button"
         onClick={() => onChange(false)}
         className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-          value === false ? 'bg-red-500/20 text-red-200 ring-1 ring-red-400/40' : 'bg-slate-800/80 text-slate-300 ring-1 ring-white/5 hover:bg-slate-700/80'
+          value === false ? 'bg-red-500/20 text-red-200 ring-1 ring-red-400/40' : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
         }`}
       >
         No

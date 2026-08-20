@@ -44,14 +44,14 @@ export function ExportButton({ datasetId, filters, sort, columns, totalRows }: E
 
   return (
     <div className="flex items-center gap-1">
-      <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+      <div className="flex items-center gap-0.5 rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white p-1">
         <button
           type="button"
           onClick={() => setFormat('csv')}
           className={`rounded-md px-2.5 py-1 text-xs transition-all duration-200 ${
             format === 'csv'
-              ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
+              : 'text-slate-400 light:text-slate-500 hover:text-slate-200 hover:bg-white/5'
           }`}
         >
           CSV
@@ -61,8 +61,8 @@ export function ExportButton({ datasetId, filters, sort, columns, totalRows }: E
           onClick={() => setFormat('json')}
           className={`rounded-md px-2.5 py-1 text-xs transition-all duration-200 ${
             format === 'json'
-              ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
+              : 'text-slate-400 light:text-slate-500 hover:text-slate-200 hover:bg-white/5'
           }`}
         >
           JSON
@@ -72,7 +72,7 @@ export function ExportButton({ datasetId, filters, sort, columns, totalRows }: E
         type="button"
         onClick={handleExport}
         disabled={exporting || totalRows === 0}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition-all duration-200 hover:bg-slate-800/80 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex items-center gap-2 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white px-3 py-2 text-sm text-slate-200 light:text-slate-700 transition-all duration-200 hover:bg-slate-800/80 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Download className="h-4 w-4" />
         Export ({totalRows.toLocaleString()})
