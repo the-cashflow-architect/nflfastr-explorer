@@ -149,3 +149,54 @@ def test_unknown_dataset_is_404(monkeypatch, tmp_path, store_factory):
     assert client.get("/api/datasets/nope/schema").status_code == 404
     assert client.post("/api/datasets/nope/query", json={}).status_code == 404
     assert client.post("/api/datasets/nope/export", json={}).status_code == 404
+
+
+def test_unknown_filter_field_is_400_not_500(monkeypatch, tmp_path, store_factory):
+    """A stale filter naming a column the target table lacks must not 500.
+
+    This is exactly what happened switching the frontend's player_season
+    view from weekly granularity: the season table has no "week" column,
+    and DuckDB's BinderException was propagating as an unhandled 500.
+    """
+    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    res = client.post(
+        "/api/datasets/player_weekly/query",
+        json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
+    )
+    assert res.status_code == 400
+
+
+def test_unknown_sort_field_is_400_not_500(monkeypatch, tmp_path, store_factory):
+    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    res = client.post(
+        "/api/datasets/player_weekly/query",
+        json={"sort": [{"field": "not_a_real_column", "direction": "desc"}]},
+    )
+    assert res.status_code == 400
+
+
+def test_unknown_field_in_data_quality_is_400(monkeypatch, tmp_path, store_factory):
+    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    res = client.post(
+        "/api/datasets/player_weekly/data-quality",
+        json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
+    )
+    assert res.status_code == 400
+
+
+def test_unknown_field_in_export_is_400(monkeypatch, tmp_path, store_factory):
+    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    res = client.post(
+        "/api/datasets/player_weekly/export",
+        json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
+    )
+    assert res.status_code == 400
+
+
+def test_unknown_field_in_filter_options_is_400(monkeypatch, tmp_path, store_factory):
+    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    res = client.post(
+        "/api/datasets/player_weekly/filter-options",
+        json={"field": "team", "filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
+    )
+    assert res.status_code == 400

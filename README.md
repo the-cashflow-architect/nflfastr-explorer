@@ -39,10 +39,15 @@ Open http://localhost:5173
 
 ## Features
 
+- **Home → drill down** — a landing page with Players / Teams / Plays entry points, quick links (Passing Leaders, Team Defense, ...), and a 32-team jump grid, instead of dropping straight into a dense table
+- **Position-aware stat views** — position pills (QB/RB/WR/TE/Defense/K-P) plus Basic/Advanced/Fantasy/Custom tabs, so the columns and default sort match the position instead of one fantasy-flavored table for everyone
+- **Team leaderboards** — league-wide offense and defense totals aggregated from real player box scores, sortable, with a click-through to that team's roster
+- **Player cockpit** — click any player to see their career table and stat trend charts, with a real headshot
 - **Smart filters** — season → week → team → player cascade; filter options update as you select
-- **Stat tooltips** — hover column headers for definitions and formulas (EPA, CPOE, WOPR, etc.)
-- **Column picker** — show/hide any stat column by category
-- **Sortable table** — click headers to sort; paginated results
+- **Stat tooltips everywhere** — hover any column header, stat tab, or position pill for a plain-language explanation; tooltips render in a portal so they're never clipped by a scrolling table or panel
+- **Focus mode** — an expand button on tables, charts, and filters opens that panel full-screen
+- **Column picker** — show/hide any stat column by category, with search
+- **Sortable table** — click headers to sort; a pinned player/team column and edge-fade shadows keep you oriented while scrolling a wide table
 
 ## Configuration
 

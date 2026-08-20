@@ -9,7 +9,9 @@ COLUMN_CATEGORIES: dict[str, str] = {
     "position": "identity",
     "position_group": "identity",
     "team": "team",
+    "recent_team": "team",
     "opponent_team": "team",
+    "games": "other",
     "season": "time",
     "week": "time",
     "season_type": "time",
@@ -23,6 +25,66 @@ COLUMN_CATEGORIES: dict[str, str] = {
     "qtr": "situation",
     "score_differential": "situation",
     "desc": "situation",
+    "play_id": "situation",
+    "game_seconds_remaining": "situation",
+    "passer_player_name": "identity",
+    "receiver_player_name": "identity",
+    "rusher_player_name": "identity",
+    "yards_gained": "play",
+    "air_yards": "play",
+    "yards_after_catch": "play",
+    "touchdown": "play",
+    "pass_touchdown": "play",
+    "rush_touchdown": "play",
+    "interception": "play",
+    "complete_pass": "play",
+    "sack": "play",
+    "first_down": "play",
+    "pass": "play",
+    "rush": "play",
+    # Core counting stats that don't carry their category's prefix.
+    "completions": "passing",
+    "attempts": "passing",
+    "carries": "rushing",
+    "receptions": "receiving",
+    "targets": "receiving",
+    # Sack production is recorded under the passer's line, not a "sacks_"
+    # prefix, so it needs an explicit entry.
+    "sacks_suffered": "passing",
+    "sack_yards_lost": "passing",
+    "sack_fumbles": "passing",
+    "sack_fumbles_lost": "passing",
+    # Efficiency shares, alongside pacr/racr/wopr below.
+    "target_share": "advanced",
+    "air_yards_share": "advanced",
+    # Return production doesn't carry a shared prefix with special_teams_tds.
+    "punt_returns": "returns",
+    "punt_return_yards": "returns",
+    "kickoff_returns": "returns",
+    "kickoff_return_yards": "returns",
+    "special_teams_tds": "returns",
+    "penalties": "penalties",
+    "penalty_yards": "penalties",
+    # Fumble stats not already covered by a passing/rushing/receiving prefix.
+    "fumble_recovery_own": "ball_security",
+    "fumble_recovery_yards_own": "ball_security",
+    "fumble_recovery_opp": "ball_security",
+    "fumble_recovery_yards_opp": "ball_security",
+    "fumble_recovery_tds": "ball_security",
+    "fumbles_forced_by_opp": "ball_security",
+    "fumbles_not_forced": "ball_security",
+    "fumbles_out_of_bounds": "ball_security",
+    "fumbles_total": "ball_security",
+    "fumbles_lost_total": "ball_security",
+    "misc_yards": "other",
+    # A portrait URL, not a stat — never offered in a column/stat picker.
+    "headshot_url": "meta",
+    # nflverse encodes these as delimited strings (e.g. field-goal distances
+    # per kick), not a single scalar, so they don't belong in a stat table.
+    "fg_made_list": "meta",
+    "fg_missed_list": "meta",
+    "fg_blocked_list": "meta",
+    "gwfg_distance_list": "meta",
 }
 
 STAT_PREFIX_CATEGORIES = {
@@ -31,7 +93,11 @@ STAT_PREFIX_CATEGORIES = {
     "receiving_": "receiving",
     "def_": "defense",
     "fantasy_": "fantasy",
-    "special_teams_": "special_teams",
+    "special_teams_": "returns",
+    "fg_": "kicking",
+    "pat_": "kicking",
+    "gwfg_": "kicking",
+    "pt_": "punting",
 }
 
 
@@ -148,8 +214,18 @@ PLAYER_WEEKLY_FILTERS: list[FilterDef] = [
     ),
 ]
 
+
+def _for_season(f: FilterDef) -> FilterDef:
+    # player_season has no per-game opponent, and its team column is named
+    # "recent_team" (a player can change teams mid-season) rather than
+    # "team" — remap so the same filter id still points at a real column.
+    if f.id == "team":
+        return FilterDef(**{**f.model_dump(), "field": "recent_team"})
+    return f
+
+
 PLAYER_SEASON_FILTERS = [
-    f for f in PLAYER_WEEKLY_FILTERS if f.id not in {"week"}
+    _for_season(f) for f in PLAYER_WEEKLY_FILTERS if f.id not in {"week", "opponent_team"}
 ]
 
 PBP_FILTERS: list[FilterDef] = [
@@ -252,6 +328,9 @@ PBP_FILTERS: list[FilterDef] = [
     ),
 ]
 
+# A neutral, position-agnostic box score. This is the fallback before any
+# stat view is chosen on the frontend, so it deliberately excludes fantasy
+# points and advanced efficiency metrics — those live in their own views.
 DEFAULT_PLAYER_WEEKLY_COLUMNS = [
     "season",
     "week",
@@ -263,7 +342,7 @@ DEFAULT_PLAYER_WEEKLY_COLUMNS = [
     "attempts",
     "passing_yards",
     "passing_tds",
-    "interceptions",
+    "passing_interceptions",
     "carries",
     "rushing_yards",
     "rushing_tds",
@@ -271,12 +350,14 @@ DEFAULT_PLAYER_WEEKLY_COLUMNS = [
     "targets",
     "receiving_yards",
     "receiving_tds",
-    "fantasy_points_ppr",
-    "epa",
 ]
 
+# player_season has no per-game opponent, and its team column is
+# "recent_team" rather than "team" — see PLAYER_SEASON_FILTERS above.
 DEFAULT_PLAYER_SEASON_COLUMNS = [
-    col for col in DEFAULT_PLAYER_WEEKLY_COLUMNS if col != "week"
+    "recent_team" if col == "team" else col
+    for col in DEFAULT_PLAYER_WEEKLY_COLUMNS
+    if col not in {"week", "opponent_team"}
 ]
 
 DEFAULT_PBP_COLUMNS = [
@@ -298,15 +379,18 @@ DEFAULT_PBP_COLUMNS = [
     "wpa",
 ]
 
+# Neutral chronological order — there's no single stat that ranks a QB
+# against a WR fairly, so the default avoids picking one (previously
+# fantasy_points_ppr, which favored skill-position players and baked a
+# fantasy-football lens into the very first thing anyone saw). The frontend
+# applies a position-appropriate sort once a stat view is chosen.
 DEFAULT_PLAYER_WEEKLY_SORT = [
     SortSpec(field="season", direction="desc"),
     SortSpec(field="week", direction="desc"),
-    SortSpec(field="fantasy_points_ppr", direction="desc"),
 ]
 
 DEFAULT_PLAYER_SEASON_SORT = [
     SortSpec(field="season", direction="desc"),
-    SortSpec(field="fantasy_points_ppr", direction="desc"),
 ]
 
 DEFAULT_PBP_SORT = [

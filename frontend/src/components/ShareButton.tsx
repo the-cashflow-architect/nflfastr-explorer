@@ -1,26 +1,10 @@
-import { Share2, Copy, Check } from 'lucide-react'
+import { Share2, Copy, Check, X } from 'lucide-react'
 import { useState } from 'react'
-import type { FilterCondition, SortSpec } from '../types'
+import type { UrlState } from '../hooks/useUrlState'
 
 interface ShareButtonProps {
-  getShareableUrl: (state: {
-    datasetId: string
-    filters: FilterCondition[]
-    sort: SortSpec[]
-    columns: string[]
-    page: number
-    viewMode: 'explore' | 'compare' | 'team'
-    exploreView: 'table' | 'chart'
-  }) => string
-  currentState: {
-    datasetId: string
-    filters: FilterCondition[]
-    sort: SortSpec[]
-    columns: string[]
-    page: number
-    viewMode: 'explore' | 'compare' | 'team'
-    exploreView: 'table' | 'chart'
-  }
+  getShareableUrl: (state: UrlState) => string
+  currentState: UrlState
 }
 
 export function ShareButton({ getShareableUrl, currentState }: ShareButtonProps) {
@@ -48,15 +32,13 @@ export function ShareButton({ getShareableUrl, currentState }: ShareButtonProps)
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <h4 className="font-semibold text-white">Share Link</h4>
               <button
                 onClick={() => setShowDialog(false)}
-                className="rounded p-1 text-slate-500 hover:bg-white/5 hover:text-white transition"
+                className="rounded p-1 text-slate-500 transition hover:bg-white/5 hover:text-white"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="relative mb-4">
@@ -64,15 +46,13 @@ export function ShareButton({ getShareableUrl, currentState }: ShareButtonProps)
                 type="text"
                 readOnly
                 value={getShareableUrl(currentState)}
-                className="w-full rounded-lg border border-white/10 bg-slate-800/70 px-3 py-2 text-sm text-slate-100 outline-none pr-10"
+                className="w-full rounded-lg border border-white/10 bg-slate-800/70 px-3 py-2 pr-20 text-sm text-slate-100 outline-none"
               />
               <button
                 onClick={handleCopy}
-                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition"
-                style={{
-                  backgroundColor: copied ? '#22c55e' : 'rgba(59, 130, 246, 0.2)',
-                  color: copied ? 'white' : '#93c5fd',
-                }}
+                className={`absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg px-2 py-1 text-xs transition ${
+                  copied ? 'bg-emerald-500 text-white' : 'bg-blue-500/20 text-blue-200'
+                }`}
               >
                 {copied ? (
                   <>
@@ -88,7 +68,7 @@ export function ShareButton({ getShareableUrl, currentState }: ShareButtonProps)
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              Link includes dataset, filters, sorting, columns, and view mode.
+              Includes your position, stat view, filters, sorting, and columns.
             </p>
           </div>
         </div>

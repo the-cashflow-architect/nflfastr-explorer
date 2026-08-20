@@ -81,11 +81,25 @@ export const FILTER_CATEGORIES: Record<string, string> = {
   team: 'Team',
   identity: 'Player',
   situation: 'Situation',
+  play: 'Play Result',
   passing: 'Passing',
   rushing: 'Rushing',
   receiving: 'Receiving',
   defense: 'Defense',
+  kicking: 'Kicking',
+  punting: 'Punting',
+  returns: 'Returns',
+  penalties: 'Penalties',
+  ball_security: 'Fumbles',
   advanced: 'Advanced',
   fantasy: 'Fantasy',
   other: 'Other',
+  // Not a stat — excluded from every column/filter picker. Kept here only
+  // so an unexpected value never renders as a raw category key.
+  meta: 'Meta',
 }
+
+/** Columns in these categories are never offered in a picker — they're
+ * identity metadata (a portrait URL) or encoded in a shape a flat table
+ * can't render (delimited lists), not stats to browse or chart. */
+export const HIDDEN_CATEGORIES = new Set(['meta'])

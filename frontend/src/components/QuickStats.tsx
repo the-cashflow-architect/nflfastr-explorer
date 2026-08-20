@@ -14,12 +14,23 @@ interface StatConfig {
   isSum?: boolean
 }
 
+// Only ever renders a tile for a column actually present in the current
+// view, so it's safe to list every dataset's variant here — player_weekly
+// exposes passing_epa/rushing_epa/receiving_epa, never a bare "epa"; only
+// play-by-play has the bare epa/wpa/cpoe fields.
 const STAT_CONFIGS: StatConfig[] = [
   { id: 'epa', label: 'Total EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'blue' },
+  { id: 'passing_epa', label: 'Passing EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'blue' },
+  { id: 'rushing_epa', label: 'Rushing EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'blue' },
+  { id: 'receiving_epa', label: 'Receiving EPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'blue' },
   { id: 'passing_yards', label: 'Passing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'emerald' },
   { id: 'rushing_yards', label: 'Rushing Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'amber' },
   { id: 'receiving_yards', label: 'Receiving Yards', icon: <BarChart3 className="h-4 w-4" />, isSum: true, color: 'purple' },
+  { id: 'def_tackles_solo', label: 'Solo Tackles', icon: <Shield className="h-4 w-4" />, isSum: true, color: 'red' },
+  { id: 'def_sacks', label: 'Sacks', icon: <Shield className="h-4 w-4" />, isSum: true, color: 'red' },
+  { id: 'fg_made', label: 'FGs Made', icon: <Target className="h-4 w-4" />, isSum: true, color: 'amber' },
   { id: 'fantasy_points_ppr', label: 'Fantasy PPR', icon: <Target className="h-4 w-4" />, isSum: true, color: 'yellow' },
+  { id: 'passing_cpoe', label: 'Avg CPOE', icon: <Shield className="h-4 w-4" />, isSum: false, color: 'blue' },
   { id: 'cpoe', label: 'Avg CPOE', icon: <Shield className="h-4 w-4" />, isSum: false, color: 'blue' },
   { id: 'wpa', label: 'Total WPA', icon: <TrendingUp className="h-4 w-4" />, isSum: true, color: 'red' },
 ]

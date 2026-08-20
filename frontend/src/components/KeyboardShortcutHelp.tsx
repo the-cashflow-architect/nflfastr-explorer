@@ -5,7 +5,7 @@ export function KeyboardShortcutHelp() {
   return (
     <div className="text-xs text-slate-500">
       <span className="hidden sm:inline">
-        {mod}+E Export | {mod}+C Compare | {mod}+K Search | {mod}+T Chart
+        {mod}+K Search · Esc Back
       </span>
     </div>
   )

@@ -1,38 +1,42 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FilterCondition, SortSpec } from '../types'
+import type { StatTab } from '../lib/statViews'
 
-interface UrlState {
-  datasetId: string
+export type Route = 'players' | 'teams' | 'plays'
+
+export interface UrlState {
+  route: Route
+  playerGranularity: 'week' | 'season'
+  position: string
+  statTab: StatTab
   filters: FilterCondition[]
   sort: SortSpec[]
   columns: string[]
   page: number
-  viewMode: 'explore' | 'compare' | 'team'
-  exploreView: 'table' | 'chart'
+  chartView: boolean
 }
 
 export function useUrlState() {
   const [urlState, setUrlState] = useState<UrlState | null>(null)
   const [isRestoring, setIsRestoring] = useState(false)
 
-  // Encode state to base64 URL-safe string
   const encodeState = useCallback((state: UrlState): string => {
     const json = JSON.stringify(state)
     return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
   }, [])
 
-  // Decode state from base64 URL-safe string
   const decodeState = useCallback((encoded: string): UrlState | null => {
     try {
       const padded = encoded.replace(/-/g, '+').replace(/_/g, '/')
       const json = atob(padded + '==='.slice((padded.length + 3) % 4))
-      return JSON.parse(json)
+      const parsed = JSON.parse(json)
+      if (!parsed || typeof parsed !== 'object' || !parsed.route) return null
+      return parsed as UrlState
     } catch {
       return null
     }
   }, [])
 
-  // Update URL with current state
   const updateUrl = useCallback((state: UrlState, replace = false) => {
     const encoded = encodeState(state)
     const url = `${window.location.pathname}?state=${encoded}`
@@ -43,7 +47,6 @@ export function useUrlState() {
     }
   }, [encodeState])
 
-  // Initialize from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const encoded = params.get('state')
@@ -57,7 +60,6 @@ export function useUrlState() {
     }
   }, [decodeState])
 
-  // Listen for popstate (back/forward buttons)
   useEffect(() => {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search)
@@ -69,17 +71,23 @@ export function useUrlState() {
           setIsRestoring(true)
           setTimeout(() => setIsRestoring(false), 100)
         }
+      } else {
+        setUrlState(null)
       }
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [decodeState])
 
-  // Generate shareable link
   const getShareableUrl = useCallback((state: UrlState): string => {
     const encoded = encodeState(state)
     return `${window.location.origin}${window.location.pathname}?state=${encoded}`
   }, [encodeState])
+
+  const clearUrl = useCallback(() => {
+    window.history.pushState(null, '', window.location.pathname)
+    setUrlState(null)
+  }, [])
 
   return {
     urlState,
@@ -87,5 +95,6 @@ export function useUrlState() {
     updateUrl,
     getShareableUrl,
     setUrlState,
+    clearUrl,
   }
 }
