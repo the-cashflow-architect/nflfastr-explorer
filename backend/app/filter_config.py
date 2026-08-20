@@ -185,33 +185,10 @@ PLAYER_WEEKLY_FILTERS: list[FilterDef] = [
         depends_on=["season", "team", "position"],
         description="Search by player name.",
     ),
-    FilterDef(
-        id="min_pass_yards",
-        field="passing_yards",
-        label="Min Pass Yds",
-        type="range",
-        category="passing",
-        depends_on=["position"],
-        description="Minimum passing yards in the row.",
-    ),
-    FilterDef(
-        id="min_rush_yards",
-        field="rushing_yards",
-        label="Min Rush Yds",
-        type="range",
-        category="rushing",
-        depends_on=["position"],
-        description="Minimum rushing yards in the row.",
-    ),
-    FilterDef(
-        id="min_rec_yards",
-        field="receiving_yards",
-        label="Min Rec Yds",
-        type="range",
-        category="receiving",
-        depends_on=["position"],
-        description="Minimum receiving yards in the row.",
-    ),
+    # Numeric stat filters (passing yards, TDs, tackles, ...) are no longer
+    # hand-curated here — the frontend generates one for every numeric
+    # column on the dataset, so any stat can be filtered, not just the
+    # three someone thought to add.
 ]
 
 

@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { BarChart2, Table2 } from 'lucide-react'
+import { BarChart2, Bookmark, Table2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSchema, queryDataset } from '../api'
 import { activeFiltersToConditions } from '../lib/filters'
+import { buildFilterDefs } from '../lib/filterDefs'
+import { quickSuggestionsFor } from '../lib/quickFilterSuggestions'
 import {
   advancedColumnsFor,
   basicColumnsFor,
@@ -18,8 +20,7 @@ import type { NavOptions } from './HomeView'
 import { ColumnPicker } from './ColumnPicker'
 import { DataTable, type SortState } from './DataTable'
 import { ExpandablePanel } from './ExpandablePanel'
-import { FilterPanel } from './FilterPanel'
-import { MobileFilterButton, MobileFilterDrawer } from './MobileFilterDrawer'
+import { FilterBar } from './FilterBar'
 import { PlayerDetail } from './PlayerDetail'
 import { PositionPills } from './PositionPills'
 import { StatTabs } from './StatTabs'
@@ -60,10 +61,10 @@ export function PlayersExplorer({
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([])
   const [customColumns, setCustomColumns] = useState<string[] | null>(null)
   const [customPickerOpen, setCustomPickerOpen] = useState(false)
+  const [savedOpen, setSavedOpen] = useState(false)
   const [sorting, setSorting] = useState<SortState[]>([])
   const [page, setPage] = useState(restored?.page ?? 1)
   const [chartView, setChartView] = useState(restored?.chartView ?? false)
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const datasetId = granularity === 'week' ? 'player_weekly' : 'player_season'
 
@@ -71,6 +72,15 @@ export function PlayersExplorer({
     queryKey: ['schema', datasetId],
     queryFn: () => fetchSchema(datasetId),
   })
+
+  // Every filterable field on the dataset, not just the handful the backend
+  // hand-curates: season/team/position/search fields come from the schema,
+  // every other numeric or flag column is generated on the fly.
+  const allFilterDefs = useMemo(() => {
+    if (!schema) return []
+    const backendDefs = schema.filters.filter((f) => f.id !== 'position_group')
+    return buildFilterDefs(schema.columns, backendDefs)
+  }, [schema])
 
   // Apply a team filter arriving from the Home page's "jump to a team" grid.
   useEffect(() => {
@@ -87,11 +97,11 @@ export function PlayersExplorer({
   // when granularity changes, so a stale field name never reaches the API —
   // that would otherwise 500 rather than just returning no rows.
   useEffect(() => {
-    if (!schema) return
+    if (!schema || allFilterDefs.length === 0) return
     setActiveFilters((current) =>
       current
         .map((f) => {
-          const next = schema.filters.find((d) => d.id === f.def.id)
+          const next = allFilterDefs.find((d) => d.id === f.def.id)
           return next ? { def: next, value: f.value } : null
         })
         .filter((f): f is ActiveFilter => f !== null),
@@ -188,7 +198,7 @@ export function PlayersExplorer({
       setSorting(sort.map((s: SortSpec) => ({ id: s.field, desc: s.direction === 'desc' })))
       setActiveFilters(
         (filters as FilterCondition[]).map((f) => ({
-          def: schema?.filters.find((d) => d.field === f.field) ?? {
+          def: allFilterDefs.find((d) => d.field === f.field) ?? {
             id: f.field, field: f.field, label: f.field, type: 'multi_select' as const, category: 'other', depends_on: [],
           },
           value: f.value,
@@ -197,7 +207,7 @@ export function PlayersExplorer({
     }
     window.addEventListener('load-saved-query', handleLoad as EventListener)
     return () => window.removeEventListener('load-saved-query', handleLoad as EventListener)
-  }, [schema])
+  }, [allFilterDefs])
 
   const totalPages = queryData ? Math.max(1, Math.ceil(queryData.total / PAGE_SIZE)) : 1
 
@@ -216,167 +226,160 @@ export function PlayersExplorer({
     )
   }
 
-  const filterDefsForPanel = (schema?.filters ?? []).filter((f) => f.id !== 'position_group')
-
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      <div className="hidden w-[300px] shrink-0 lg:block">
-        <ExpandablePanel title="Filters" className="h-full">
-          {schema ? (
-            <FilterPanel
-              datasetId={datasetId}
-              filterDefs={filterDefsForPanel}
-              activeFilters={activeFilters}
-              onChange={setActiveFilters}
-            />
-          ) : (
-            <div className="h-full animate-pulse rounded-2xl bg-slate-900/40" />
-          )}
-          <div className="mt-4">
-            <SavedQueriesPanel
-              datasetId={datasetId}
-              sorting={effectiveSort}
-              visibleColumns={visibleColumns}
-              filterConditions={filterConditions}
-            />
-          </div>
-        </ExpandablePanel>
-      </div>
-
-      <section className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <PositionPills active={positionId} onChange={setPositionId} />
-            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1 text-sm">
-              <button
-                type="button"
-                onClick={() => setGranularity('week')}
-                className={`rounded-md px-2.5 py-1 transition ${granularity === 'week' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
-              >
-                Weekly
-              </button>
-              <button
-                type="button"
-                onClick={() => setGranularity('season')}
-                className={`rounded-md px-2.5 py-1 transition ${granularity === 'season' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
-              >
-                Season
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <MobileFilterButton onClick={() => setMobileFiltersOpen(true)} activeCount={activeFilters.length} />
-            <StatTabs
-              active={statTab}
-              onChange={(tab) => {
-                setStatTab(tab)
-                if (tab === 'custom') {
-                  setCustomColumns((cur) => cur ?? basicColumnsFor(positionId, hasWeek))
-                  setCustomPickerOpen(true)
-                }
-              }}
-              advancedDisabled={!advancedAvailable}
-              advancedDisabledReason={family.advancedUnavailableReason}
-            />
-            {statTab === 'custom' && schema ? (
-              <ColumnPicker
-                allColumns={schema.columns}
-                selected={visibleColumns}
-                onChange={(cols) => setCustomColumns(cols)}
-                open={customPickerOpen}
-                onOpenChange={setCustomPickerOpen}
-              />
-            ) : null}
-            {schema && queryData ? (
-              <>
-                <ExportButton datasetId={datasetId} filters={filterConditions} sort={effectiveSort} columns={visibleColumns} totalRows={queryData.total} />
-                <ShareButton getShareableUrl={getShareableUrl} currentState={shareState} />
-              </>
-            ) : null}
-            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
-              <button
-                type="button"
-                onClick={() => setChartView(false)}
-                className={`rounded-md p-1.5 transition ${!chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
-                title="Table"
-              >
-                <Table2 className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartView(true)}
-                className={`rounded-md p-1.5 transition ${chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
-                title="Chart"
-              >
-                <BarChart2 className="h-4 w-4" />
-              </button>
-            </div>
+    <section className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <PositionPills active={positionId} onChange={setPositionId} />
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setGranularity('week')}
+              className={`rounded-md px-2.5 py-1 transition ${granularity === 'week' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
+            >
+              Weekly
+            </button>
+            <button
+              type="button"
+              onClick={() => setGranularity('season')}
+              className={`rounded-md px-2.5 py-1 transition ${granularity === 'season' ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
+            >
+              Season
+            </button>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatTabs
+            active={statTab}
+            onChange={(tab) => {
+              setStatTab(tab)
+              if (tab === 'custom') {
+                setCustomColumns((cur) => cur ?? basicColumnsFor(positionId, hasWeek))
+                setCustomPickerOpen(true)
+              }
+            }}
+            advancedDisabled={!advancedAvailable}
+            advancedDisabledReason={family.advancedUnavailableReason}
+          />
+          {statTab === 'custom' && schema ? (
+            <ColumnPicker
+              allColumns={schema.columns}
+              selected={visibleColumns}
+              onChange={(cols) => setCustomColumns(cols)}
+              open={customPickerOpen}
+              onOpenChange={setCustomPickerOpen}
+            />
+          ) : null}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSavedOpen((o) => !o)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800/80"
+            >
+              <Bookmark className="h-4 w-4" />
+              Saved
+            </button>
+            {savedOpen ? (
+              <>
+                <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={() => setSavedOpen(false)} />
+                <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur-xl">
+                  <SavedQueriesPanel
+                    datasetId={datasetId}
+                    sorting={effectiveSort}
+                    visibleColumns={visibleColumns}
+                    filterConditions={filterConditions}
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+          {schema && queryData ? (
+            <>
+              <ExportButton datasetId={datasetId} filters={filterConditions} sort={effectiveSort} columns={visibleColumns} totalRows={queryData.total} />
+              <ShareButton getShareableUrl={getShareableUrl} currentState={shareState} />
+            </>
+          ) : null}
+          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/60 p-1">
+            <button
+              type="button"
+              onClick={() => setChartView(false)}
+              className={`rounded-md p-1.5 transition ${!chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
+              title="Table"
+            >
+              <Table2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartView(true)}
+              className={`rounded-md p-1.5 transition ${chartView ? 'bg-blue-500/20 text-blue-200' : 'text-slate-400 hover:text-white'}`}
+              title="Chart"
+            >
+              <BarChart2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
 
-        {queryError && <ErrorBanner error={queryError} />}
+      {schema ? (
+        <FilterBar
+          datasetId={datasetId}
+          allDefs={allFilterDefs}
+          activeFilters={activeFilters}
+          onChange={setActiveFilters}
+          quickSuggestions={quickSuggestionsFor(positionId)}
+        />
+      ) : null}
 
-        {schemaLoading || !schema ? (
-          <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/30">
-            <div className="text-center">
-              <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
-              <p className="text-sm text-slate-400">Loading player data…</p>
+      {queryError && <ErrorBanner error={queryError} />}
+
+      {schemaLoading || !schema ? (
+        <div className="flex flex-1 items-center justify-center rounded-2xl border border-white/10 bg-slate-900/30">
+          <div className="text-center">
+            <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-400" />
+            <p className="text-sm text-slate-400">Loading player data…</p>
+          </div>
+        </div>
+      ) : chartView ? (
+        <StatCharts schema={schema} queryData={queryData} visibleColumns={visibleColumns} />
+      ) : (
+        <>
+          <ExpandablePanel title="Players">
+            <DataTable
+              rows={queryData?.rows ?? []}
+              columns={queryData?.columns ?? visibleColumns}
+              columnMeta={schema.columns}
+              sorting={sorting}
+              onSortingChange={(next) => {
+                setSorting(next)
+                setManualSort(true)
+              }}
+              loading={isFetching}
+              pinFirstColumn
+              onRowClick={(row) => {
+                const name = String(row.player_display_name ?? '')
+                if (name) setDetailPlayer(name)
+              }}
+              rowLabel={(row) => `View ${String(row.player_display_name ?? '')}`}
+            />
+          </ExpandablePanel>
+
+          {queryData && <DataQualityIndicator datasetId={datasetId} filters={filterConditions} totalRows={queryData.total} />}
+          {queryData && <QuickStats rows={queryData.rows} columns={queryData.columns} />}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-sm">
+            <span className="text-slate-400">{queryData ? `${queryData.total.toLocaleString()} matching rows` : '—'}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
+                Previous
+              </button>
+              <span className="text-slate-400">Page {page} of {totalPages}</span>
+              <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
+                Next
+              </button>
             </div>
           </div>
-        ) : chartView ? (
-          <StatCharts schema={schema} queryData={queryData} visibleColumns={visibleColumns} />
-        ) : (
-          <>
-            <ExpandablePanel title="Players">
-              <DataTable
-                rows={queryData?.rows ?? []}
-                columns={queryData?.columns ?? visibleColumns}
-                columnMeta={schema.columns}
-                sorting={sorting}
-                onSortingChange={(next) => {
-                  setSorting(next)
-                  setManualSort(true)
-                }}
-                loading={isFetching}
-                pinFirstColumn
-                onRowClick={(row) => {
-                  const name = String(row.player_display_name ?? '')
-                  if (name) setDetailPlayer(name)
-                }}
-                rowLabel={(row) => `View ${String(row.player_display_name ?? '')}`}
-              />
-            </ExpandablePanel>
-
-            {queryData && <DataQualityIndicator datasetId={datasetId} filters={filterConditions} totalRows={queryData.total} />}
-            {queryData && <QuickStats rows={queryData.rows} columns={queryData.columns} />}
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-sm">
-              <span className="text-slate-400">{queryData ? `${queryData.total.toLocaleString()} matching rows` : '—'}</span>
-              <div className="flex items-center gap-2">
-                <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
-                  Previous
-                </button>
-                <span className="text-slate-400">Page {page} of {totalPages}</span>
-                <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-white/10 px-3 py-1.5 text-slate-300 transition hover:bg-white/5 disabled:opacity-40">
-                  Next
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </section>
-
-      <MobileFilterDrawer open={mobileFiltersOpen} onClose={() => setMobileFiltersOpen(false)}>
-        {schema ? (
-          <FilterPanel
-            datasetId={datasetId}
-            filterDefs={filterDefsForPanel}
-            activeFilters={activeFilters}
-            onChange={setActiveFilters}
-          />
-        ) : null}
-      </MobileFilterDrawer>
-    </div>
+        </>
+      )}
+    </section>
   )
 }
-

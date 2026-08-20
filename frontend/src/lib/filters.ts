@@ -84,3 +84,31 @@ export function formatCell(value: unknown, columnId?: string, category?: string)
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
 }
+
+/** True once a value is meaningful enough to keep as an active filter. */
+export function hasValue(def: FilterDef, value: unknown): boolean {
+  if (value == null || value === '') return false
+  if (Array.isArray(value)) return value.length > 0
+  if (def.type === 'range') {
+    const r = value as { min?: number | null; max?: number | null }
+    return r.min != null || r.max != null
+  }
+  return true
+}
+
+/** Compact "Label: value" text for a chip. */
+export function formatFilterValue(def: FilterDef, value: unknown): string {
+  if (def.type === 'range') {
+    const r = value as { min?: number | null; max?: number | null }
+    if (r.min != null && r.max != null) return `${r.min}–${r.max}`
+    if (r.min != null) return `≥ ${r.min}`
+    if (r.max != null) return `≤ ${r.max}`
+    return ''
+  }
+  if (def.type === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) {
+    if (value.length <= 3) return value.map(String).join(', ')
+    return `${value.slice(0, 2).map(String).join(', ')} +${value.length - 2}`
+  }
+  return String(value)
+}
