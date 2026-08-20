@@ -210,6 +210,22 @@ class DataStore:
     def _cursor(self) -> duckdb.DuckDBPyConnection:
         return self.conn.cursor()
 
+    def _run(self, cur: duckdb.DuckDBPyConnection, sql: str, params: list | None = None):
+        """Execute user-driven SQL, translating "no such column" into a 400.
+
+        A filter, sort, or column list can reference a field that doesn't
+        exist for the dataset being queried (e.g. a stale filter carried over
+        after switching from weekly to season data, where the team column is
+        named differently). DuckDB reports that as a BinderException, which
+        FastAPI would otherwise surface as an unhandled 500 — turning it into
+        a ValueError lets the existing `except ValueError -> 400` handling in
+        main.py catch it like any other bad request.
+        """
+        try:
+            return cur.execute(sql, params) if params is not None else cur.execute(sql)
+        except duckdb.BinderException as exc:
+            raise ValueError(f"Invalid field in request: {exc}") from exc
+
     def _table_exists(self, cur: duckdb.DuckDBPyConnection, table: str) -> bool:
         row = cur.execute(
             "SELECT COUNT(*) FROM duckdb_tables() WHERE table_name = ?", [table]
@@ -449,13 +465,13 @@ class DataStore:
         select_sql = build_select_columns(req.columns, columns)
 
         count_sql = f"SELECT COUNT(*) FROM {table}{where_sql}"
-        total = int(cur.execute(count_sql, params).fetchone()[0])
+        total = int(self._run(cur, count_sql, params).fetchone()[0])
 
         offset = (req.page - 1) * req.page_size
         data_sql = (
             f"SELECT {select_sql} FROM {table}{where_sql}{order_sql} LIMIT ? OFFSET ?"
         )
-        rows = cur.execute(data_sql, params + [req.page_size, offset]).fetchdf()
+        rows = self._run(cur, data_sql, params + [req.page_size, offset]).fetchdf()
         records = rows.where(rows.notna(), None).to_dict(orient="records")
 
         return QueryResponse(
@@ -492,13 +508,13 @@ class DataStore:
             params.append(f"%{search}%")
 
         count_sql = f'SELECT COUNT(DISTINCT "{field}") FROM {table}{where_sql}'
-        total = int(cur.execute(count_sql, params).fetchone()[0])
+        total = int(self._run(cur, count_sql, params).fetchone()[0])
 
         options_sql = (
             f'SELECT DISTINCT "{field}" AS value FROM {table}{where_sql} '
             f"ORDER BY value NULLS LAST LIMIT ?"
         )
-        result = cur.execute(options_sql, params + [limit]).fetchall()
+        result = self._run(cur, options_sql, params + [limit]).fetchall()
         options = [row[0] for row in result if row[0] is not None]
 
         return FilterOptionsResponse(field=field, options=options, total=total)
@@ -516,7 +532,7 @@ class DataStore:
         where_sql, params = build_where(filters)
 
         sql = build_null_count_sql(table, columns, where_sql)
-        row = cur.execute(sql, params).fetchone()
+        row = self._run(cur, sql, params).fetchone()
 
         filtered_count = int(row[0])
         total_count = self._count(cur, table)
@@ -549,7 +565,7 @@ class DataStore:
         where_sql, params = build_where(req.filters)
         cur = self._cursor()
         sql = f"SELECT COUNT(*) FROM {cfg.table}{where_sql}"
-        return int(cur.execute(sql, params).fetchone()[0])
+        return int(self._run(cur, sql, params).fetchone()[0])
 
     def export_stream(
         self,
@@ -571,7 +587,7 @@ class DataStore:
 
         cur = self._cursor()
         sql = f"SELECT {select_sql} FROM {cfg.table}{where_sql}{order_sql} LIMIT ?"
-        cur.execute(sql, params + [max_rows])
+        self._run(cur, sql, params + [max_rows])
 
         if req.format == "json":
             return self._stream_json(cur)

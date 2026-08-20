@@ -69,10 +69,16 @@ export function clearFilterCascade(
   return active.filter((f) => !remove.has(f.def.id))
 }
 
-export function formatCell(value: unknown): string {
+// Columns that are codes or identifiers, not quantities — a season or a
+// down should never render with a thousands separator ("2,025").
+const NO_GROUPING_CATEGORIES = new Set(['identity', 'time', 'meta'])
+const NO_GROUPING_COLUMNS = new Set(['down', 'qtr', 'game_seconds_remaining'])
+
+export function formatCell(value: unknown, columnId?: string, category?: string): string {
   if (value == null) return '—'
   if (typeof value === 'number') {
-    if (Number.isInteger(value)) return value.toLocaleString()
+    const plain = (category && NO_GROUPING_CATEGORIES.has(category)) || (columnId && NO_GROUPING_COLUMNS.has(columnId))
+    if (Number.isInteger(value)) return plain ? String(value) : value.toLocaleString()
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
   }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'

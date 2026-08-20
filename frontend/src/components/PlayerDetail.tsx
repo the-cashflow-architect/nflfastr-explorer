@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 import { queryDataset } from '../api'
 import { formatCell } from '../lib/filters'
 import type { DatasetSchema, ColumnMeta } from '../types'
+import { FILTER_CATEGORIES, HIDDEN_CATEGORIES } from '../types'
 import { StatTrendChart, MultiStatTrend } from './StatTrendChart'
+import { ExpandablePanel } from './ExpandablePanel'
 
 interface PlayerDetailProps {
   datasetId: string
@@ -12,39 +14,90 @@ interface PlayerDetailProps {
   playerName: string
 }
 
-export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProps) {
-  const [selectedStat, setSelectedStat] = useState<string>('epa')
-  const [compareStats, setCompareStats] = useState<string[]>(['epa', 'fantasy_points_ppr'])
+// A cockpit page fetches its own broad column set rather than depending on
+// whatever the caller's current stat tab happens to show — a QB opened from
+// the Advanced tab should still show rushing/receiving history if they have
+// any, and vice versa.
+//
+// player_season has no per-game week or opponent, and names its team column
+// "recent_team" rather than "team" — requesting (or sorting by) a column
+// that doesn't exist in the target table doesn't get silently dropped like
+// an unknown filter does, it 500s, so this has to branch on the dataset.
+const DETAIL_STAT_COLUMNS = [
+  'completions', 'attempts', 'passing_yards', 'passing_tds', 'passing_interceptions',
+  'passing_epa', 'passing_cpoe',
+  'carries', 'rushing_yards', 'rushing_tds', 'rushing_epa',
+  'receptions', 'targets', 'receiving_yards', 'receiving_tds', 'receiving_epa',
+  'def_tackles_solo', 'def_sacks', 'def_interceptions', 'def_pass_defended',
+  'fg_made', 'fg_att', 'pt_yards', 'pt_net_yards',
+  'fantasy_points', 'fantasy_points_ppr',
+]
 
-  // Get all data for this player
+function detailColumnsFor(datasetId: string): string[] {
+  const identity =
+    datasetId === 'player_season'
+      ? ['season', 'position', 'recent_team', 'headshot_url']
+      : ['season', 'week', 'position', 'team', 'opponent_team', 'headshot_url']
+  return [...identity, ...DETAIL_STAT_COLUMNS]
+}
+
+function detailSortFor(datasetId: string): { field: string; direction: 'asc' | 'desc' }[] {
+  return datasetId === 'player_season'
+    ? [{ field: 'season', direction: 'asc' }]
+    : [{ field: 'season', direction: 'asc' }, { field: 'week', direction: 'asc' }]
+}
+
+const CANDIDATE_SUMMARY_STATS = [
+  'completions', 'attempts', 'passing_yards', 'passing_tds', 'passing_interceptions',
+  'carries', 'rushing_yards', 'rushing_tds',
+  'receptions', 'targets', 'receiving_yards', 'receiving_tds',
+  'def_tackles_solo', 'def_sacks', 'def_interceptions',
+  'fg_made', 'fg_att', 'pt_yards',
+  'fantasy_points_ppr',
+]
+
+export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProps) {
+  const [selectedStat, setSelectedStat] = useState<string | null>(null)
+  const [compareStats, setCompareStats] = useState<string[] | null>(null)
+
   const { data: playerData, isLoading: playerLoading } = useQuery({
     queryKey: ['player-detail', datasetId, playerName],
     queryFn: () =>
       queryDataset(datasetId, {
-        filters: [
-          { field: 'player_display_name', operator: 'eq' as const, value: playerName }
-        ],
-        sort: [{ field: 'season', direction: 'asc' }, { field: 'week', direction: 'asc' }],
+        filters: [{ field: 'player_display_name', operator: 'eq' as const, value: playerName }],
+        sort: detailSortFor(datasetId),
         page: 1,
         page_size: 500,
-        columns: schema.default_columns,
+        columns: detailColumnsFor(datasetId),
       }),
-    enabled: !!schema && !!playerName,
+    enabled: !!datasetId && !!playerName,
   })
 
   const rows = useMemo(() => playerData?.rows ?? [], [playerData])
+  const headshotUrl = rows.find((r) => typeof r.headshot_url === 'string')?.headshot_url as
+    | string
+    | undefined
+  const position = rows[rows.length - 1]?.position as string | undefined
+  const lastRow = rows[rows.length - 1]
+  const latestTeam = (lastRow?.team ?? lastRow?.recent_team) as string | undefined
 
-  // Aggregate data by season
+  // Which candidate stats this player actually has activity in — adapts the
+  // summary table to their position instead of showing a fixed list where
+  // half the columns are always blank.
+  const relevantStats = useMemo(() => {
+    return CANDIDATE_SUMMARY_STATS.filter((id) =>
+      rows.some((r) => typeof r[id] === 'number' && (r[id] as number) !== 0),
+    ).slice(0, 8)
+  }, [rows])
+
   const seasonAggregates = useMemo(() => {
     if (!rows.length) return []
-
     const seasons = new Map<string, Record<string, number[]>>()
     for (const row of rows) {
       const season = String(row.season ?? '')
       if (!seasons.has(season)) seasons.set(season, {})
-
       const stats = seasons.get(season)!
-      for (const col of schema.default_columns) {
+      for (const col of relevantStats) {
         const val = row[col]
         if (typeof val === 'number' && !isNaN(val)) {
           if (!stats[col]) stats[col] = []
@@ -52,51 +105,48 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
         }
       }
     }
+    return Array.from(seasons.entries())
+      .map(([season, stats]) => {
+        const agg = Object.fromEntries(
+          Object.entries(stats).map(([k, v]) => [k, v.reduce((a, b) => a + b, 0)]),
+        )
+        const gamesPlayed = rows.filter((r) => String(r.season ?? '') === season).length
+        return { season: Number(season), games: gamesPlayed, ...agg } as Record<string, number>
+      })
+      .sort((a, b) => a.season - b.season)
+  }, [rows, relevantStats])
 
-    return Array.from(seasons.entries()).map(([season, stats]) => {
-      const agg = Object.fromEntries(
-        Object.entries(stats).map(([k, v]) => [
-          k,
-          (v as number[]).reduce((a: number, b: number) => a + b, 0),
-        ]),
-      )
-      return { season: Number(season), ...agg } as Record<string, number | string>
-    }).sort((a, b) => Number(a.season) - Number(b.season))
-  }, [rows, schema.default_columns])
-
-  // Get available numeric stats
   const numericStats = useMemo(() => {
     return schema.columns
-      .filter((c) => c.dtype.includes('INT') || c.dtype.includes('FLOAT') || c.dtype.includes('DOUBLE') || c.dtype.includes('DECIMAL'))
-      .filter((c) => !['season', 'week', 'player_id'].includes(c.id))
+      .filter((c) => ['INT', 'FLOAT', 'DOUBLE', 'DECIMAL'].some((t) => c.dtype.includes(t)))
+      .filter((c) => !HIDDEN_CATEGORIES.has(c.category))
+      .filter((c) => !['season', 'week'].includes(c.id))
   }, [schema.columns])
 
-  // Get latest season stats
-  const latestSeasonData = seasonAggregates[seasonAggregates.length - 1]
-  const latestPlayerRows = rows.filter(
-    (r) => !latestSeasonData || r.season === latestSeasonData.season,
-  )
-
-  // Compute summary stats
-  const summaryStats = useMemo(() => {
-    if (!latestSeasonData) return {}
-
-    const result: Record<string, number> = {}
-    const statKeys = ['passing_yards', 'rushing_yards', 'receiving_yards', 'passing_tds', 'rushing_tds', 'receiving_tds', 'fantasy_points_ppr', 'epa', 'cpoe', 'wpa', 'targets', 'receptions', 'attempts', 'carries']
-
-    for (const key of statKeys) {
-      const val = latestSeasonData[key]
-      if (val != null && typeof val === 'number') {
-        result[key] = val
-      }
+  const numericByCategory = useMemo(() => {
+    const map = new Map<string, ColumnMeta[]>()
+    for (const c of numericStats) {
+      if (!map.has(c.category)) map.set(c.category, [])
+      map.get(c.category)!.push(c)
     }
+    return Array.from(map.entries()).sort(([a], [b]) => (FILTER_CATEGORIES[a] ?? a).localeCompare(FILTER_CATEGORIES[b] ?? b))
+  }, [numericStats])
 
-    if (latestPlayerRows.length > 0) {
-      result.games = latestPlayerRows.length
+  // Default to a stat this player actually has activity in, picked in a
+  // sensible priority order — never the first alphabetical column, which
+  // would as often as not be something irrelevant to their position.
+  const smartDefault = useMemo(() => {
+    for (const id of ['passing_yards', 'rushing_yards', 'receiving_yards', 'def_tackles_solo', 'fg_made', 'pt_yards']) {
+      if (rows.some((r) => typeof r[id] === 'number' && (r[id] as number) !== 0)) return id
     }
+    return relevantStats[0] ?? 'passing_yards'
+  }, [rows, relevantStats])
 
-    return result
-  }, [latestSeasonData, latestPlayerRows.length])
+  const effectiveSelectedStat = selectedStat ?? smartDefault
+  const effectiveCompareStats = compareStats ?? relevantStats.slice(0, 3)
+
+  const totalGames = rows.length
+  const hasWeek = rows.some((r) => r.week != null)
 
   if (playerLoading || !playerData) {
     return (
@@ -111,36 +161,44 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
 
   return (
     <div className="space-y-6">
-      {/* Player Header */}
       <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 shadow-lg shadow-blue-500/20">
-            <User className="h-8 w-8 text-white" />
-          </div>
+          {headshotUrl ? (
+            <img
+              src={headshotUrl}
+              alt=""
+              className="h-16 w-16 rounded-xl bg-slate-800 object-cover shadow-lg"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 shadow-lg shadow-blue-500/20">
+              <User className="h-8 w-8 text-white" />
+            </div>
+          )}
           <div>
             <h2 className="text-2xl font-bold text-white">{playerName}</h2>
             <div className="mt-1 flex flex-wrap gap-4 text-sm text-slate-400">
-              {summaryStats.games ? (
+              {position ? <span>{position}{latestTeam ? ` · ${latestTeam}` : ''}</span> : null}
+              {totalGames ? (
                 <span className="inline-flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
-                  {summaryStats.games} games
+                  {totalGames} {hasWeek ? 'games' : 'seasons'}
                 </span>
               ) : null}
               <span className="inline-flex items-center gap-1.5">
                 <BarChart3 className="h-4 w-4" />
-                {seasonAggregates.length} seasons
+                {seasonAggregates.length} {seasonAggregates.length === 1 ? 'season' : 'seasons'}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Season Summary */}
-      {seasonAggregates.length > 0 && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Season Summary
-          </h3>
+      {seasonAggregates.length > 0 && relevantStats.length > 0 && (
+        <ExpandablePanel title="Season Summary" className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Season Summary</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-sm">
               <thead>
@@ -148,110 +206,116 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
                   <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Season
                   </th>
-                  {['games', 'passing_yards', 'rushing_yards', 'receiving_yards', 'fantasy_points_ppr', 'epa', 'cpoe', 'wpa'].map(
-                    (stat) => (
+                  <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Games
+                  </th>
+                  {relevantStats.map((stat) => {
+                    const meta = schema.columns.find((c) => c.id === stat)
+                    return (
                       <th
                         key={stat}
                         className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-400"
                       >
-                        {stat.replace(/_/g, ' ')}
+                        {meta?.label ?? stat}
                       </th>
-                    ),
-                  )}
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {seasonAggregates.map((season) => (
                   <tr key={String(season.season)} className="border-b border-white/5">
-                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-200 font-medium">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-200">
                       {season.season}
                     </td>
-                    {['games', 'passing_yards', 'rushing_yards', 'receiving_yards', 'fantasy_points_ppr', 'epa', 'cpoe', 'wpa'].map(
-                      (stat) => (
-                        <td
-                          key={stat}
-                          className="whitespace-nowrap px-3 py-2.5 text-right text-slate-300 font-mono"
-                        >
-                          {season[stat] != null ? formatCell(season[stat]) : '—'}
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300">
+                      {season.games}
+                    </td>
+                    {relevantStats.map((stat) => {
+                      const meta = schema.columns.find((c) => c.id === stat)
+                      return (
+                        <td key={stat} className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-300">
+                          {season[stat] != null ? formatCell(season[stat], stat, meta?.category) : '—'}
                         </td>
-                      ),
-                    )}
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </ExpandablePanel>
       )}
 
-      {/* Trend Charts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Single Stat Trend */}
         <div className="space-y-3">
           <select
-            value={selectedStat}
+            value={effectiveSelectedStat}
             onChange={(e) => setSelectedStat(e.target.value)}
             className="w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
           >
-            {numericStats
-              .filter((c) => c.id !== 'season' && c.id !== 'week')
-              .map((stat) => (
-                <option key={stat.id} value={stat.id}>
-                  {stat.label}
-                </option>
-              ))}
+            {numericByCategory.map(([category, stats]) => (
+              <optgroup key={category} label={FILTER_CATEGORIES[category] ?? category}>
+                {stats.map((stat) => (
+                  <option key={stat.id} value={stat.id}>
+                    {stat.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           </select>
-          {selectedStat && (
+          <ExpandablePanel title={`${effectiveSelectedStat} trend`}>
             <StatTrendChart
               data={rows}
-              xField={rows.some((r) => r.week) ? 'week' : 'season'}
-              yField={selectedStat}
-              columnMeta={(schema.columns.find((c) => c.id === selectedStat) ?? {
-                id: selectedStat,
-                label: selectedStat,
-                description: '',
-                dtype: 'unknown',
-                category: 'other',
-              }) as ColumnMeta}
+              xField={hasWeek ? 'week' : 'season'}
+              yField={effectiveSelectedStat}
+              columnMeta={
+                (schema.columns.find((c) => c.id === effectiveSelectedStat) ?? {
+                  id: effectiveSelectedStat,
+                  label: effectiveSelectedStat,
+                  description: '',
+                  dtype: 'unknown',
+                  category: 'other',
+                }) as ColumnMeta
+              }
               playerName={playerName}
             />
-          )}
+          </ExpandablePanel>
         </div>
 
-        {/* Multi-Stat Comparison */}
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            {numericStats
-              .filter((c) => !['season', 'week', 'player_id'].includes(c.id))
-              .slice(0, 12)
-              .map((stat) => (
-                <button
-                  key={stat.id}
-                  onClick={() => {
-                    if (compareStats.includes(stat.id)) {
-                      setCompareStats(compareStats.filter((s) => s !== stat.id))
-                    } else if (compareStats.length < 5) {
-                      setCompareStats([...compareStats, stat.id])
-                    }
-                  }}
-                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
-                    compareStats.includes(stat.id)
-                      ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
-                      : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  {stat.label}
-                </button>
-              ))}
+            {numericStats.slice(0, 16).map((stat) => (
+              <button
+                key={stat.id}
+                onClick={() => {
+                  const current = effectiveCompareStats
+                  if (current.includes(stat.id)) {
+                    setCompareStats(current.filter((s) => s !== stat.id))
+                  } else if (current.length < 5) {
+                    setCompareStats([...current, stat.id])
+                  }
+                }}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                  effectiveCompareStats.includes(stat.id)
+                    ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/40'
+                    : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                {stat.label}
+              </button>
+            ))}
           </div>
-          {compareStats.length > 0 && (
-            <MultiStatTrend
-              data={rows}
-              xField={rows.some((r) => r.week) ? 'week' : 'season'}
-              yFields={compareStats}
-              columnsMeta={schema.columns}
-              playerName={playerName}
-            />
+          {effectiveCompareStats.length > 0 && (
+            <ExpandablePanel title="Stat Trends">
+              <MultiStatTrend
+                data={rows}
+                xField={hasWeek ? 'week' : 'season'}
+                yFields={effectiveCompareStats}
+                columnsMeta={schema.columns}
+                playerName={playerName}
+              />
+            </ExpandablePanel>
           )}
         </div>
       </div>

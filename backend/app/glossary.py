@@ -45,6 +45,14 @@ GLOSSARY: dict[str, dict[str, str]] = {
         "label": "Opponent",
         "description": "Three-letter abbreviation of the opposing team.",
     },
+    "recent_team": {
+        "label": "Team",
+        "description": "The team this player was on most recently in the season — for a player who changed teams mid-season, earlier games may have been with a different one.",
+    },
+    "games": {
+        "label": "Games",
+        "description": "Games played that season.",
+    },
     # Passing
     "completions": {
         "label": "Completions",
@@ -64,17 +72,62 @@ GLOSSARY: dict[str, dict[str, str]] = {
         "label": "Passing TDs",
         "description": "Touchdowns scored via pass completion.",
     },
-    "interceptions": {
-        "label": "Interceptions",
-        "description": "Passes thrown that were intercepted by the defense.",
+    "interception": {
+        "label": "Interception",
+        "description": "Whether this pass was intercepted (1) or not (0).",
     },
-    "sacks": {
+    "complete_pass": {
+        "label": "Completed",
+        "description": "Whether this pass attempt was completed (1) or not (0).",
+    },
+    "sack": {
+        "label": "Sack",
+        "description": "Whether the passer was sacked on this play (1) or not (0).",
+    },
+    "first_down": {
+        "label": "First Down",
+        "description": "Whether this play gained a first down (1) or not (0).",
+    },
+    "pass": {
+        "label": "Pass Play",
+        "description": "Whether this play was a pass attempt (1) or not (0), including sacks.",
+    },
+    "rush": {
+        "label": "Rush Play",
+        "description": "Whether this play was a designed run (1) or not (0).",
+    },
+    "yards_after_catch": {
+        "label": "YAC (Play)",
+        "description": "Yards gained after the catch on this individual play.",
+    },
+    "play_id": {
+        "label": "Play ID",
+        "description": "Sequential identifier for the play within its game.",
+    },
+    "sacks_suffered": {
         "label": "Sacks Taken",
-        "description": "Times the passer was sacked (team-level in some views).",
+        "description": "Times this player was sacked as the passer.",
     },
-    "sack_yards": {
+    "sack_yards_lost": {
         "label": "Sack Yards Lost",
-        "description": "Total yards lost on sacks.",
+        "description": "Total yards lost on sacks taken by this player.",
+    },
+    "sack_fumbles": {
+        "label": "Sack Fumbles",
+        "description": "Fumbles that occurred on a sack.",
+    },
+    "sack_fumbles_lost": {
+        "label": "Sack Fumbles Lost",
+        "description": "Sack fumbles recovered by the defense.",
+    },
+    "passing_interceptions": {
+        "label": "Interceptions",
+        "description": "Passes thrown by this player that were intercepted.",
+    },
+    "passing_cpoe": {
+        "label": "CPOE",
+        "description": "Completion Percentage Over Expected on this player's pass attempts.",
+        "formula": "Actual completion rate minus the nflfastR model's expected completion probability.",
     },
     "passing_air_yards": {
         "label": "Air Yards",
@@ -252,19 +305,357 @@ GLOSSARY: dict[str, dict[str, str]] = {
         "label": "Forced Fumbles",
         "description": "Fumbles forced by the defender.",
     },
-    "def_fumble_recoveries": {
+    "def_fumbles": {
         "label": "Fumble Recoveries",
         "description": "Fumbles recovered by the defender.",
     },
-    "def_safety": {
+    "def_safeties": {
         "label": "Safeties",
-        "description": "Safeties recorded.",
+        "description": "Safeties recorded by the defender.",
+    },
+    "def_tackles_for_loss_yards": {
+        "label": "TFL Yards",
+        "description": "Yards lost by the offense on this defender's tackles for loss.",
+    },
+    "def_sack_yards": {
+        "label": "Sack Yards",
+        "description": "Yards lost by the offense on this defender's sacks.",
+    },
+    "def_interception_yards": {
+        "label": "INT Return Yards",
+        "description": "Yards gained returning this defender's interceptions.",
+    },
+    "def_punt_blocks": {
+        "label": "Punts Blocked",
+        "description": "Opponent punts blocked by this defender.",
+    },
+    "def_pat_blocks": {
+        "label": "PATs Blocked",
+        "description": "Opponent extra points blocked by this defender.",
+    },
+    "def_fg_blocks": {
+        "label": "FGs Blocked",
+        "description": "Opponent field goals blocked by this defender.",
+    },
+    "def_2pt_atts": {
+        "label": "Def 2PT Attempts Against",
+        "description": "Opponent two-point conversion attempts this defender faced.",
+    },
+    "def_2pt_made": {
+        "label": "Def 2PT Allowed",
+        "description": "Opponent two-point conversions allowed on plays involving this defender.",
+    },
+    # Kicking
+    "fg_made": {
+        "label": "FG Made",
+        "description": "Field goals made.",
+    },
+    "fg_att": {
+        "label": "FG Attempts",
+        "description": "Field goals attempted.",
+    },
+    "fg_missed": {
+        "label": "FG Missed",
+        "description": "Field goals missed (not blocked).",
+    },
+    "fg_blocked": {
+        "label": "FG Blocked",
+        "description": "Field goal attempts blocked by the defense.",
+    },
+    "fg_long": {
+        "label": "Long FG",
+        "description": "Longest field goal made, in yards.",
+    },
+    "fg_pct": {
+        "label": "FG %",
+        "description": "Field goal accuracy.",
+        "formula": "fg_made / fg_att.",
+    },
+    "fg_made_0_19": {
+        "label": "FG Made 0-19",
+        "description": "Field goals made from 0-19 yards.",
+    },
+    "fg_made_20_29": {
+        "label": "FG Made 20-29",
+        "description": "Field goals made from 20-29 yards.",
+    },
+    "fg_made_30_39": {
+        "label": "FG Made 30-39",
+        "description": "Field goals made from 30-39 yards.",
+    },
+    "fg_made_40_49": {
+        "label": "FG Made 40-49",
+        "description": "Field goals made from 40-49 yards.",
+    },
+    "fg_made_50_59": {
+        "label": "FG Made 50-59",
+        "description": "Field goals made from 50-59 yards.",
+    },
+    "fg_made_60_": {
+        "label": "FG Made 60+",
+        "description": "Field goals made from 60 or more yards.",
+    },
+    "fg_missed_0_19": {
+        "label": "FG Missed 0-19",
+        "description": "Field goals missed from 0-19 yards.",
+    },
+    "fg_missed_20_29": {
+        "label": "FG Missed 20-29",
+        "description": "Field goals missed from 20-29 yards.",
+    },
+    "fg_missed_30_39": {
+        "label": "FG Missed 30-39",
+        "description": "Field goals missed from 30-39 yards.",
+    },
+    "fg_missed_40_49": {
+        "label": "FG Missed 40-49",
+        "description": "Field goals missed from 40-49 yards.",
+    },
+    "fg_missed_50_59": {
+        "label": "FG Missed 50-59",
+        "description": "Field goals missed from 50-59 yards.",
+    },
+    "fg_missed_60_": {
+        "label": "FG Missed 60+",
+        "description": "Field goals missed from 60 or more yards.",
+    },
+    "fg_made_distance": {
+        "label": "FG Made Distance",
+        "description": "Combined distance, in yards, of all made field goals.",
+    },
+    "fg_missed_distance": {
+        "label": "FG Missed Distance",
+        "description": "Combined distance, in yards, of all missed field goals.",
+    },
+    "fg_blocked_distance": {
+        "label": "FG Blocked Distance",
+        "description": "Combined distance, in yards, of all blocked field goal attempts.",
+    },
+    "pat_made": {
+        "label": "PAT Made",
+        "description": "Extra points made.",
+    },
+    "pat_att": {
+        "label": "PAT Attempts",
+        "description": "Extra points attempted.",
+    },
+    "pat_missed": {
+        "label": "PAT Missed",
+        "description": "Extra points missed (not blocked).",
+    },
+    "pat_blocked": {
+        "label": "PAT Blocked",
+        "description": "Extra point attempts blocked by the defense.",
+    },
+    "pat_pct": {
+        "label": "PAT %",
+        "description": "Extra point accuracy.",
+        "formula": "pat_made / pat_att.",
+    },
+    "gwfg_made": {
+        "label": "Game-Winning FG Made",
+        "description": "Field goals made that either won the game or gave the lead in the final minute of regulation or in overtime.",
+    },
+    "gwfg_att": {
+        "label": "Game-Winning FG Attempts",
+        "description": "Field goal attempts in a game-winning situation.",
+    },
+    "gwfg_missed": {
+        "label": "Game-Winning FG Missed",
+        "description": "Game-winning field goal attempts missed.",
+    },
+    "gwfg_blocked": {
+        "label": "Game-Winning FG Blocked",
+        "description": "Game-winning field goal attempts blocked.",
+    },
+    "gwfg_distance": {
+        "label": "Game-Winning FG Distance",
+        "description": "Distance, in yards, of game-winning field goal attempts.",
+    },
+    # Punting
+    "pt_att": {
+        "label": "Punts",
+        "description": "Punts attempted.",
+    },
+    "pt_blocked": {
+        "label": "Punts Blocked",
+        "description": "Punts blocked by the defense.",
+    },
+    "pt_long": {
+        "label": "Long Punt",
+        "description": "Longest punt, in yards.",
+    },
+    "pt_yards": {
+        "label": "Punt Yards",
+        "description": "Total gross punting yards.",
+    },
+    "pt_net_yards": {
+        "label": "Net Punt Yards",
+        "description": "Total punting yards after subtracting return yardage.",
+        "formula": "Gross punt yards minus yards returned by the opponent.",
+    },
+    "pt_inside_20": {
+        "label": "Punts Inside 20",
+        "description": "Punts downed or fair-caught inside the opponent's 20-yard line.",
+    },
+    "pt_out_of_bounds": {
+        "label": "Punts OOB",
+        "description": "Punts that went out of bounds.",
+    },
+    "pt_downed": {
+        "label": "Punts Downed",
+        "description": "Punts downed by the coverage team before a return.",
+    },
+    "pt_touchback": {
+        "label": "Punt Touchbacks",
+        "description": "Punts resulting in a touchback.",
+    },
+    "pt_fair_caught": {
+        "label": "Punts Fair Caught",
+        "description": "Punts fair-caught by the returner.",
+    },
+    "pt_returned": {
+        "label": "Punts Returned",
+        "description": "Punts returned by the opponent.",
+    },
+    "pt_return_yards": {
+        "label": "Punt Return Yards Allowed",
+        "description": "Yards gained by the opponent returning this player's punts.",
+    },
+    "pt_return_tds": {
+        "label": "Punt Return TDs Allowed",
+        "description": "Touchdowns scored by the opponent returning this player's punts.",
+    },
+    # Returns
+    "punt_returns": {
+        "label": "Punt Returns",
+        "description": "Punts returned by this player.",
+    },
+    "punt_return_yards": {
+        "label": "Punt Return Yards",
+        "description": "Yards gained returning punts.",
+    },
+    "kickoff_returns": {
+        "label": "Kickoff Returns",
+        "description": "Kickoffs returned by this player.",
+    },
+    "kickoff_return_yards": {
+        "label": "Kickoff Return Yards",
+        "description": "Yards gained returning kickoffs.",
+    },
+    "special_teams_tds": {
+        "label": "Special Teams TDs",
+        "description": "Touchdowns scored on returns or other special teams plays.",
+    },
+    # Penalties
+    "penalties": {
+        "label": "Penalties",
+        "description": "Penalties committed by this player.",
+    },
+    "penalty_yards": {
+        "label": "Penalty Yards",
+        "description": "Yards assessed on this player's penalties.",
+    },
+    # Ball security (fumbles not already tied to a passing/rushing/receiving stat line)
+    "fumble_recovery_own": {
+        "label": "Own Fumbles Recovered",
+        "description": "This player's own fumbles that they recovered themselves.",
+    },
+    "fumble_recovery_yards_own": {
+        "label": "Own Fumble Recovery Yards",
+        "description": "Yards gained recovering their own fumble.",
+    },
+    "fumble_recovery_opp": {
+        "label": "Opponent Fumbles Recovered",
+        "description": "Opponent fumbles recovered by this player.",
+    },
+    "fumble_recovery_yards_opp": {
+        "label": "Opponent Fumble Recovery Yards",
+        "description": "Yards gained recovering an opponent's fumble.",
+    },
+    "fumble_recovery_tds": {
+        "label": "Fumble Recovery TDs",
+        "description": "Touchdowns scored on a fumble recovery.",
+    },
+    "fumbles_forced_by_opp": {
+        "label": "Fumbles Forced by Opponent",
+        "description": "Times this player fumbled after being forced to by the defense.",
+    },
+    "fumbles_not_forced": {
+        "label": "Unforced Fumbles",
+        "description": "Fumbles this player lost control of without being forced.",
+    },
+    "fumbles_out_of_bounds": {
+        "label": "Fumbles Out of Bounds",
+        "description": "Fumbles by this player that went out of bounds.",
+    },
+    "fumbles_total": {
+        "label": "Total Fumbles",
+        "description": "All fumbles by this player, across passing, rushing, and receiving plays.",
+    },
+    "fumbles_lost_total": {
+        "label": "Total Fumbles Lost",
+        "description": "All fumbles by this player recovered by the opposing team.",
+    },
+    "misc_yards": {
+        "label": "Misc Yards",
+        "description": "Yardage from plays that don't fit standard passing, rushing, or receiving categories (e.g. lateral or recovery yardage).",
+    },
+    # Fantasy bonus-yardage thresholds — used by some fantasy scoring formats
+    # that award bonus points for crossing a yardage milestone in a game.
+    "passing_10": {
+        "label": "Pass Yardage Bonus (10)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big passing games.",
+    },
+    "passing_16": {
+        "label": "Pass Yardage Bonus (16)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big passing games.",
+    },
+    "passing_20": {
+        "label": "Pass Yardage Bonus (20)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big passing games.",
+    },
+    "passing_40": {
+        "label": "Pass Yardage Bonus (40)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big passing games.",
+    },
+    "rushing_10": {
+        "label": "Rush Yardage Bonus (10)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big rushing games.",
+    },
+    "rushing_12": {
+        "label": "Rush Yardage Bonus (12)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big rushing games.",
+    },
+    "rushing_20": {
+        "label": "Rush Yardage Bonus (20)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big rushing games.",
+    },
+    "rushing_40": {
+        "label": "Rush Yardage Bonus (40)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big rushing games.",
+    },
+    "receiving_10": {
+        "label": "Rec Yardage Bonus (10)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big receiving games.",
+    },
+    "receiving_16": {
+        "label": "Rec Yardage Bonus (16)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big receiving games.",
+    },
+    "receiving_20": {
+        "label": "Rec Yardage Bonus (20)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big receiving games.",
+    },
+    "receiving_40": {
+        "label": "Rec Yardage Bonus (40)",
+        "description": "Bonus-yardage threshold tracked for fantasy scoring formats that award points for big receiving games.",
     },
     # EPA aggregates
     "epa": {
-        "label": "Total EPA",
-        "description": "Total Expected Points Added across all phases attributed to the player.",
-        "formula": "Sum of EPA on all plays involving the player.",
+        "label": "EPA",
+        "description": "Expected Points Added by this individual play — how much the play changed the offense's scoring expectation.",
+        "formula": "Expected points after the play minus expected points before it (nflfastR EP model).",
     },
     "fantasy_points": {
         "label": "Fantasy Pts",
@@ -303,6 +694,10 @@ GLOSSARY: dict[str, dict[str, str]] = {
     "qtr": {
         "label": "Quarter",
         "description": "Quarter of the game (1–4; 5+ for overtime).",
+    },
+    "game_id": {
+        "label": "Game ID",
+        "description": "Unique nflverse identifier for the game this row belongs to.",
     },
     "game_seconds_remaining": {
         "label": "Game Clock",
