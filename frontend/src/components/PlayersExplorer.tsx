@@ -209,11 +209,16 @@ export function PlayersExplorer({
 
   // Everything that identifies the row (season/name/position/team) stays a
   // single value per group; player name leads so it can be the pinned
-  // column, matching the normal table.
+  // column, matching the normal table. "opponent_team" is deliberately
+  // excluded even though it's a "team"-category column — it changes every
+  // week, so grouping by it would split one player into a separate row per
+  // week instead of one row with a week per column (the exact bug that
+  // made week 1 look "complete" and every other week look sparse: each
+  // week's row was really a different opponent-specific group).
   const groupColumns = useMemo(() => {
     if (!breakdownActive || !schema) return []
     const cols = visibleColumns.filter((id) => {
-      if (id === 'week' || id === weeklyBreakdownField) return false
+      if (id === 'week' || id === 'opponent_team' || id === weeklyBreakdownField) return false
       const meta = schema.columns.find((c) => c.id === id)
       return id === 'season' || (meta && (meta.category === 'identity' || meta.category === 'team'))
     })
@@ -224,10 +229,14 @@ export function PlayersExplorer({
   }, [breakdownActive, schema, visibleColumns, weeklyBreakdownField])
 
   // Every other visible stat stays in the table too, just summed across the
-  // whole filtered range instead of split out per week.
+  // whole filtered range instead of split out per week. Opponent isn't a
+  // stat and can't be summed, so it's dropped entirely from this view
+  // rather than shown as a nonsensical total.
   const breakdownAggColumns = useMemo(() => {
     if (!breakdownActive) return []
-    return visibleColumns.filter((id) => id !== 'week' && id !== weeklyBreakdownField && !groupColumns.includes(id))
+    return visibleColumns.filter(
+      (id) => id !== 'week' && id !== 'opponent_team' && id !== weeklyBreakdownField && !groupColumns.includes(id),
+    )
   }, [breakdownActive, visibleColumns, weeklyBreakdownField, groupColumns])
 
   const { data: breakdownData, isFetching: breakdownFetching, error: breakdownError } = useQuery({
