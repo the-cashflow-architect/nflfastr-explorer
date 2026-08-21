@@ -210,6 +210,59 @@ def test_weekly_breakdown_rejects_unknown_weekly_field(store):
         store.weekly_breakdown("player_weekly", req)
 
 
+def test_ranked_query_computes_rank_and_qualification(store):
+    from app.models import RankingsRequest, SortSpec
+
+    req = RankingsRequest(
+        filters=[FilterCondition(field="season", operator=FilterOperator.in_, value=[2025])],
+        columns=["player_display_name", "passing_yards"],
+        sort=[SortSpec(field="passing_yards", direction="desc")],
+        page=1,
+        page_size=50,
+        rank_fields=["passing_yards"],
+        qualify_field="passing_yards",
+        qualify_min=100,
+    )
+    resp = store.ranked_query("player_weekly", req)
+
+    assert resp.total == 30  # odd i in range(60) -> season 2025, per the fixture
+    total_qualified = resp.rows[0]["__total_qualified"]
+    assert total_qualified == sum(1 for r in resp.rows if r["passing_yards"] >= 100)
+    assert all(r["__total_qualified"] == total_qualified for r in resp.rows)
+
+    qualified_values = sorted((r["passing_yards"] for r in resp.rows if r["__qualifies"]), reverse=True)
+    for r in resp.rows:
+        assert r["__qualifies"] == (r["passing_yards"] >= 100)
+        expected_rank = sum(1 for v in qualified_values if v > r["passing_yards"]) + 1
+        assert r["__rank__passing_yards"] == expected_rank
+
+
+def test_ranked_query_without_qualification_ranks_everyone(store):
+    from app.models import RankingsRequest
+
+    req = RankingsRequest(
+        filters=[FilterCondition(field="season", operator=FilterOperator.in_, value=[2025])],
+        columns=["passing_yards"],
+        page=1,
+        page_size=50,
+        rank_fields=["passing_yards"],
+    )
+    resp = store.ranked_query("player_weekly", req)
+
+    assert all(r["__qualifies"] is True for r in resp.rows)
+    assert all(r["__total_qualified"] == resp.total for r in resp.rows)
+    best = max(r["passing_yards"] for r in resp.rows)
+    assert next(r["__rank__passing_yards"] for r in resp.rows if r["passing_yards"] == best) == 1
+
+
+def test_ranked_query_rejects_unknown_rank_field(store):
+    from app.models import RankingsRequest
+
+    req = RankingsRequest(rank_fields=["not_a_real_column"])
+    with pytest.raises(ValueError):
+        store.ranked_query("player_weekly", req)
+
+
 def test_weekly_breakdown_rejects_empty_group_columns(store):
     from app.models import WeeklyBreakdownRequest
 

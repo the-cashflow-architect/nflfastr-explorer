@@ -25,12 +25,15 @@ interface PlaysExplorerProps {
   isRestoring: boolean
   updateUrl: (state: UrlState, replace?: boolean) => void
   getShareableUrl: (state: UrlState) => string
+  /** Jump to that team's players — clicking a team code (offense or defense) in a play row. */
+  onTeamClick?: (team: string) => void
 }
 
 const PAGE_SIZE = 50
 const DATASET_ID = 'play_by_play'
+const LINKABLE_COLUMNS = ['posteam', 'defteam']
 
-export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUrl }: PlaysExplorerProps) {
+export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUrl, onTeamClick }: PlaysExplorerProps) {
   const restored = urlState?.route === 'plays' ? urlState : null
 
   const { data: schema, isLoading: schemaLoading } = useQuery({
@@ -237,6 +240,15 @@ export function PlaysExplorer({ urlState, isRestoring, updateUrl, getShareableUr
               loading={isFetching}
               pinFirstColumn
               rankOffset={(page - 1) * PAGE_SIZE}
+              linkableColumns={onTeamClick ? LINKABLE_COLUMNS : undefined}
+              onCellClick={
+                onTeamClick
+                  ? (colId, row) => {
+                      const team = row[colId]
+                      if (typeof team === 'string' && team) onTeamClick(team)
+                    }
+                  : undefined
+              }
             />
           </ExpandablePanel>
 

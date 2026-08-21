@@ -93,6 +93,33 @@ export function fetchFilterOptions(
   })
 }
 
+export interface RankingsResponse {
+  rows: Record<string, unknown>[]
+  total: number
+  page: number
+  page_size: number
+  columns: string[]
+}
+
+export function fetchRankings(
+  datasetId: string,
+  body: {
+    filters: FilterCondition[]
+    columns?: string[]
+    sort: SortSpec[]
+    page: number
+    page_size: number
+    rank_fields: string[]
+    qualify_field?: string | null
+    qualify_min?: number | null
+  },
+) {
+  return request<RankingsResponse>(`/api/datasets/${datasetId}/rankings`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function checkHealth() {
   return request<{ status: string }>('/api/health')
 }

@@ -126,3 +126,33 @@ class WeeklyBreakdownResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class RankingsRequest(BaseModel):
+    filters: list[FilterCondition] = Field(default_factory=list)
+    columns: list[str] | None = None
+    sort: list[SortSpec] = Field(default_factory=list)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=500)
+    # Stat columns to compute a rank + qualification for, e.g. every visible
+    # numeric stat. One global qualification rule applies to all of them
+    # (mirrors how a real leaderboard picks one volume floor — e.g. "at
+    # least 48 attempts" — for every stat on the page, not a different bar
+    # per column).
+    rank_fields: list[str]
+    qualify_field: str | None = None
+    qualify_min: float | None = None
+
+
+class RankingsResponse(BaseModel):
+    # Same row shape as /query, with extra keys per requested rank field:
+    # "__rank__<field>" (this row's standing among qualified rows, or its
+    # hypothetical standing if it doesn't qualify), "__qualifies" (whether
+    # this row met the threshold), "__total_qualified" (the qualifying
+    # cohort size — the same number for every field, since qualification is
+    # one global rule for the whole request).
+    rows: list[dict[str, Any]]
+    total: int
+    page: int
+    page_size: int
+    columns: list[str]

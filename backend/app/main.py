@@ -15,7 +15,7 @@ from .config import (
     cors_origins,
 )
 from .data_store import store
-from .models import ExportRequest, FilterOptionsRequest, QueryRequest, WeeklyBreakdownRequest
+from .models import ExportRequest, FilterOptionsRequest, QueryRequest, RankingsRequest, WeeklyBreakdownRequest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -107,6 +107,16 @@ def data_quality(dataset_id: str, body: QueryRequest):
 def weekly_breakdown(dataset_id: str, body: WeeklyBreakdownRequest):
     try:
         return store.weekly_breakdown(dataset_id, body)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Dataset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/datasets/{dataset_id}/rankings")
+def ranked_query(dataset_id: str, body: RankingsRequest):
+    try:
+        return store.ranked_query(dataset_id, body)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Dataset not found") from exc
     except ValueError as exc:

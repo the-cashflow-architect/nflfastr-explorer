@@ -44,6 +44,8 @@ from .models import (
     FilterOptionsResponse,
     QueryRequest,
     QueryResponse,
+    RankingsRequest,
+    RankingsResponse,
     SortSpec,
     WeeklyBreakdownRequest,
     WeeklyBreakdownResponse,
@@ -495,6 +497,76 @@ class DataStore:
         records = self._records(rows)
 
         return QueryResponse(
+            rows=records,
+            total=total,
+            page=req.page,
+            page_size=req.page_size,
+            columns=list(rows.columns),
+        )
+
+    def ranked_query(self, dataset_id: str, req: RankingsRequest) -> RankingsResponse:
+        """Like `query`, but every row also carries its rank on each requested
+        stat, against one shared qualification rule for the whole request.
+
+        A row's rank is "1 + how many qualifying rows beat it" — the standard
+        rank definition, and one that happens to work identically whether the
+        row itself qualifies or not: for a qualifying row it's its standing
+        among the qualified cohort; for a non-qualifying row it's exactly the
+        standing it *would* have if inserted into that cohort. No window
+        function or join is needed for that — a row's rank never depends on
+        any other non-qualifying row, so a correlated subquery against a
+        small pre-filtered "qualified rows" CTE is enough, and avoids needing
+        a join key that doesn't exist uniformly across every dataset here.
+        """
+        cfg = self.ensure_loaded(dataset_id)
+        table = cfg.table
+        columns = self._columns_for(table)
+        cur = self._cursor()
+
+        where_sql, where_params = build_where(req.filters)
+        order_sql = build_order(req.sort or self._default_sort(cfg, columns))
+        select_sql = build_select_columns(req.columns, columns)
+
+        rank_fields = list(dict.fromkeys(f for f in req.rank_fields if f in columns))
+        if not rank_fields:
+            raise ValueError("rank_fields must reference real columns")
+
+        qualify_field = req.qualify_field if req.qualify_field in columns else None
+        use_qualify = qualify_field is not None and req.qualify_min is not None
+
+        count_sql = f"SELECT COUNT(*) FROM {table}{where_sql}"
+        total = int(self._run(cur, count_sql, where_params).fetchone()[0])
+
+        if use_qualify:
+            qf = quote_identifier(qualify_field)
+            q_only_sql = f"SELECT * FROM filtered WHERE {qf} >= ?"
+            qualifies_expr = f"({qf} >= ?)"
+            extra_params: list[Any] = [req.qualify_min, req.qualify_min]
+        else:
+            q_only_sql = "SELECT * FROM filtered"
+            qualifies_expr = "TRUE"
+            extra_params = []
+
+        rank_cols = [
+            f'(SELECT COUNT(*) FROM q_only WHERE {quote_identifier(f)} > filtered.{quote_identifier(f)}) '
+            f'+ 1 AS "__rank__{f}"'
+            for f in rank_fields
+        ]
+
+        offset = (req.page - 1) * req.page_size
+        data_sql = (
+            f"WITH filtered AS (SELECT * FROM {table}{where_sql}), "
+            f"q_only AS ({q_only_sql}) "
+            f'SELECT {select_sql}, {qualifies_expr} AS "__qualifies", '
+            f'(SELECT COUNT(*) FROM q_only) AS "__total_qualified", '
+            f"{', '.join(rank_cols)} "
+            f"FROM filtered{order_sql} LIMIT ? OFFSET ?"
+        )
+        params = where_params + extra_params + [req.page_size, offset]
+        rows = self._run(cur, data_sql, params).fetchdf()
+        records = self._records(rows)
+
+        return RankingsResponse(
             rows=records,
             total=total,
             page=req.page,
