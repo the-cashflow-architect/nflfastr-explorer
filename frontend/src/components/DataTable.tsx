@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Filter, Gauge } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Filter, Gauge, Hash } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCell } from '../lib/filters'
 import type { ColumnMeta } from '../types'
@@ -13,7 +13,7 @@ export interface SortState {
 // row on it means something. Deliberately excludes games/season/week (not a
 // stat), identity/team/time (not a number worth ranking), and
 // fumbles/penalties (more is worse, not better).
-const RANKABLE_CATEGORIES = new Set([
+export const RANKABLE_CATEGORIES = new Set([
   'passing',
   'rushing',
   'receiving',
@@ -60,6 +60,21 @@ const TIER_LABEL: Record<number, string> = {
   1: 'Bottom 20% among rows shown',
 }
 
+function ordinalSuffix(n: number): string {
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 13) return 'th'
+  switch (n % 10) {
+    case 1:
+      return 'st'
+    case 2:
+      return 'nd'
+    case 3:
+      return 'rd'
+    default:
+      return 'th'
+  }
+}
+
 interface ColumnGroup {
   /** Header shown above the group, spanning every column in it. */
   label: string
@@ -83,6 +98,22 @@ interface DataTableProps {
   maxHeight?: string
   /** Groups of columns (e.g. one stat broken out per week) under a shared header. */
   columnGroups?: ColumnGroup[]
+  /**
+   * When on, rows carry `__rank__<colId>` / `__qualifies` / `__total_qualified`
+   * keys (from the /rankings endpoint) and eligible cells show a "4/27" (or
+   * "UQ4/27" if this row didn't meet the qualification bar) badge instead of
+   * the tier dot. The toggle itself is owned by the caller, since flipping it
+   * means re-fetching from a different endpoint, not just a display switch.
+   */
+  rankingsMode?: boolean
+  onToggleRankings?: () => void
+  /**
+   * Column ids that should render their value as its own clickable link,
+   * independent of `onRowClick` — e.g. a team code in a play-by-play row
+   * jumping to that team's players, without the whole row being clickable.
+   */
+  linkableColumns?: string[]
+  onCellClick?: (colId: string, row: Record<string, unknown>) => void
 }
 
 export function DataTable({
@@ -97,6 +128,10 @@ export function DataTable({
   onRowClick,
   rowLabel,
   maxHeight = 'calc(100vh - 220px)',
+  rankingsMode,
+  onToggleRankings,
+  linkableColumns,
+  onCellClick,
   columnGroups,
 }: DataTableProps) {
   const metaById = useMemo(
@@ -238,7 +273,9 @@ export function DataTable({
   ) => {
     const meta = metaById.get(colId)
     const content = formatCell(row[colId], colId, meta?.category)
-    const tier = statTiers.get(colId)?.get(rowIdx)
+    const rankValue = row[`__rank__${colId}`]
+    const hasRank = rankingsMode && typeof rankValue === 'number'
+    const tier = hasRank ? undefined : statTiers.get(colId)?.get(rowIdx)
     const compact = meta && COMPACT_CATEGORIES.has(meta.category)
     // The pinned cell needs its own opaque background (it sits above the
     // scrolling columns behind it), matched to this row's stripe so there's
@@ -257,6 +294,17 @@ export function DataTable({
             <span className="font-medium text-blue-300 light:text-blue-600 group-hover:text-blue-200 group-hover:underline underline-offset-2">
               {content}
             </span>
+          ) : linkableColumns?.includes(colId) && onCellClick ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onCellClick(colId, row)
+              }}
+              className="font-medium text-blue-300 light:text-blue-600 hover:text-blue-200 hover:underline underline-offset-2"
+            >
+              {content}
+            </button>
           ) : (
             content
           )}
@@ -266,6 +314,28 @@ export function DataTable({
               className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${TIER_DOT[tier]}`}
             />
           ) : null}
+          {hasRank ? (() => {
+            const rank = rankValue as number
+            const totalQualified = row.__total_qualified as number | undefined
+            const qualifies = row.__qualifies as boolean | undefined
+            const label = qualifies === false ? `UQ${rank}` : String(rank)
+            const title =
+              qualifies === false
+                ? `Would rank ${rank}${ordinalSuffix(rank)} out of ${totalQualified ?? '?'} qualified in ${meta?.label ?? colId} — didn't meet the qualification minimum`
+                : `Ranked ${rank}${ordinalSuffix(rank)} out of ${totalQualified ?? '?'} qualified in ${meta?.label ?? colId}`
+            return (
+              <span
+                title={title}
+                className={`inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] font-bold tabular-nums ${
+                  qualifies === false
+                    ? 'bg-slate-700/60 text-slate-400 light:bg-slate-200 light:text-slate-500'
+                    : 'bg-blue-500/20 text-blue-200 light:text-blue-700'
+                }`}
+              >
+                {label}/{totalQualified ?? '—'}
+              </span>
+            )
+          })() : null}
         </span>
       </td>
     )
@@ -281,7 +351,26 @@ export function DataTable({
         </div>
       ) : null}
 
-      <div className="flex items-center justify-end border-b border-white/5 light:border-slate-200 py-1.5 pl-2 pr-10">
+      <div className="flex items-center justify-end gap-2 border-b border-white/5 light:border-slate-200 py-1.5 pl-2 pr-10">
+        {onToggleRankings ? (
+          <button
+            type="button"
+            onClick={onToggleRankings}
+            title={
+              rankingsMode
+                ? 'Hide league rankings'
+                : "Show every player's rank out of qualified players, for every stat"
+            }
+            className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors duration-150 ${
+              rankingsMode
+                ? 'border-blue-400/30 bg-blue-400/10 text-blue-200 light:text-blue-700'
+                : 'border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white text-slate-400 light:text-slate-500 hover:text-white light:hover:text-slate-900'
+            }`}
+          >
+            <Hash className="h-3 w-3" />
+            Rankings
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setShowTiers((v) => !v)}

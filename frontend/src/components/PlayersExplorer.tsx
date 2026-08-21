@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { BarChart2, Bookmark, CalendarRange, Table2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { fetchSchema, fetchWeeklyBreakdown, queryDataset } from '../api'
+import { fetchRankings, fetchSchema, fetchWeeklyBreakdown, queryDataset } from '../api'
 import { activeFiltersToConditions } from '../lib/filters'
 import { buildFilterDefs, isNumeric } from '../lib/filterDefs'
 import { quickSuggestionsFor } from '../lib/quickFilterSuggestions'
@@ -18,7 +18,7 @@ import type { ActiveFilter, ColumnMeta, FilterCondition, SortSpec } from '../typ
 import type { UrlState } from '../hooks/useUrlState'
 import type { NavOptions } from './HomeView'
 import { ColumnPicker } from './ColumnPicker'
-import { DataTable, type SortState } from './DataTable'
+import { DataTable, RANKABLE_CATEGORIES, type SortState } from './DataTable'
 import { ExpandablePanel } from './ExpandablePanel'
 import { FilterBar } from './FilterBar'
 import { PlayerDetail } from './PlayerDetail'
@@ -45,6 +45,24 @@ interface PlayersExplorerProps {
 
 const PAGE_SIZE = 50
 
+// A sensible starting qualification bar per position, so "Rankings" is
+// useful the moment it's turned on rather than defaulting to nothing (rbsdm
+// does the same thing with its "qb_min" attempts floor). Weekly rows are a
+// single game's volume; season rows are a whole year's, so the same stat
+// needs a very different floor depending on which granularity is active.
+// Users can freely override both the field and the number afterward.
+function defaultQualification(positionId: string, hasWeek: boolean): { field: string; min: number } | null {
+  const table: Record<string, { field: string; week: number; season: number }> = {
+    qb: { field: 'attempts', week: 10, season: 150 },
+    rb: { field: 'carries', week: 6, season: 60 },
+    wr: { field: 'targets', week: 3, season: 30 },
+    te: { field: 'targets', week: 2, season: 20 },
+  }
+  const entry = table[positionId]
+  if (!entry) return null
+  return { field: entry.field, min: hasWeek ? entry.week : entry.season }
+}
+
 export function PlayersExplorer({
   navOpts,
   detailPlayer,
@@ -67,6 +85,9 @@ export function PlayersExplorer({
   const [page, setPage] = useState(restored?.page ?? 1)
   const [chartView, setChartView] = useState(restored?.chartView ?? false)
   const [weeklyBreakdownField, setWeeklyBreakdownField] = useState<string | null>(null)
+  const [rankingsMode, setRankingsMode] = useState(false)
+  const [qualifyField, setQualifyField] = useState<string | null>(null)
+  const [qualifyMin, setQualifyMin] = useState<number | null>(null)
 
   const datasetId = granularity === 'week' ? 'player_weekly' : 'player_season'
 
@@ -128,6 +149,15 @@ export function PlayersExplorer({
 
   const hasWeek = granularity === 'week'
 
+  // Re-derive a sensible qualification bar whenever position or granularity
+  // changes — the previous one is very likely wrong for the new context
+  // (e.g. a QB's attempts floor makes no sense once you switch to RB).
+  useEffect(() => {
+    const def = defaultQualification(positionId, hasWeek)
+    setQualifyField(def?.field ?? null)
+    setQualifyMin(def?.min ?? null)
+  }, [positionId, hasWeek])
+
   const family = getStatFamily(positionId)
   const advancedAvailable = advancedColumnsFor(positionId, hasWeek) != null
 
@@ -182,7 +212,35 @@ export function PlayersExplorer({
         page_size: PAGE_SIZE,
         columns: visibleColumns,
       }),
-    enabled: !!schema && visibleColumns.length > 0 && !weeklyBreakdownField,
+    enabled: !!schema && visibleColumns.length > 0 && !weeklyBreakdownField && !rankingsMode,
+  })
+
+  // Every visible column worth ranking — the same "does more mean better"
+  // categories the tier dots use, so Rankings mode never tries to rank a
+  // season/week/name column.
+  const rankFields = useMemo(
+    () =>
+      visibleColumns.filter((id) => {
+        const meta = schema?.columns.find((c) => c.id === id)
+        return meta && RANKABLE_CATEGORIES.has(meta.category)
+      }),
+    [visibleColumns, schema],
+  )
+
+  const { data: rankingsData, isFetching: rankingsFetching, error: rankingsError } = useQuery({
+    queryKey: ['players-rankings', datasetId, filterConditions, effectiveSort, page, visibleColumns, rankFields, qualifyField, qualifyMin],
+    queryFn: () =>
+      fetchRankings(datasetId, {
+        filters: filterConditions,
+        columns: visibleColumns,
+        sort: effectiveSort,
+        page,
+        page_size: PAGE_SIZE,
+        rank_fields: rankFields,
+        qualify_field: qualifyField,
+        qualify_min: qualifyMin,
+      }),
+    enabled: rankingsMode && !weeklyBreakdownField && !!schema && rankFields.length > 0,
   })
 
   // A numeric stat, currently visible, that isn't itself an identity/team
@@ -204,6 +262,13 @@ export function PlayersExplorer({
       setWeeklyBreakdownField(null)
     }
   }, [weeklyBreakdownOptions, weeklyBreakdownField])
+
+  // Weekly breakdown pivots the table into a structurally different shape
+  // (a week per column); rankings only make sense against the normal
+  // one-row-per-player view, so the two are mutually exclusive.
+  useEffect(() => {
+    if (weeklyBreakdownField) setRankingsMode(false)
+  }, [weeklyBreakdownField])
 
   const breakdownActive = hasWeek && !!weeklyBreakdownField
 
@@ -289,7 +354,10 @@ export function PlayersExplorer({
     return [{ label: weeklyFieldMeta.label, columnIds: breakdownData.weeks.map((w) => `week_${w}`) }]
   }, [breakdownActive, breakdownData, weeklyFieldMeta])
 
-  useEffect(() => setPage(1), [datasetId, positionId, statTab, activeFilters, weeklyBreakdownField])
+  useEffect(
+    () => setPage(1),
+    [datasetId, positionId, statTab, activeFilters, weeklyBreakdownField, rankingsMode, qualifyField, qualifyMin],
+  )
 
   // Persist to the URL so the current view is shareable.
   const shareState: UrlState = {
@@ -328,7 +396,7 @@ export function PlayersExplorer({
     return () => window.removeEventListener('load-saved-query', handleLoad as EventListener)
   }, [remapDefs])
 
-  const activeTotal = breakdownActive ? breakdownData?.total : queryData?.total
+  const activeTotal = breakdownActive ? breakdownData?.total : rankingsMode ? rankingsData?.total : queryData?.total
   const totalPages = activeTotal != null ? Math.max(1, Math.ceil(activeTotal / PAGE_SIZE)) : 1
 
   if (detailPlayer && schema) {
@@ -341,7 +409,16 @@ export function PlayersExplorer({
         >
           ← Back to Players
         </button>
-        <PlayerDetail datasetId={datasetId} schema={schema} playerName={detailPlayer} />
+        <PlayerDetail
+          datasetId={datasetId}
+          schema={schema}
+          playerName={detailPlayer}
+          onTeamClick={(team) => {
+            const teamDef = remapDefs.find((d) => d.id === 'team')
+            if (teamDef) setActiveFilters([{ def: teamDef, value: [team] }])
+            setDetailPlayer(null)
+          }}
+        />
       </div>
     )
   }
@@ -400,6 +477,37 @@ export function PlayersExplorer({
               onOpenChange={setCustomPickerOpen}
             />
           ) : null}
+          {rankingsMode ? (
+            <label className="inline-flex items-center gap-1.5 rounded-xl border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-sm text-blue-200 light:text-blue-700">
+              Qualify:
+              <select
+                value={qualifyField ?? ''}
+                onChange={(e) => setQualifyField(e.target.value || null)}
+                className="bg-transparent text-sm outline-none"
+              >
+                <option value="">none</option>
+                {['attempts', 'carries', 'targets', 'receptions', 'games']
+                  .filter((id) => schema?.columns.some((c) => c.id === id))
+                  .map((id) => (
+                    <option key={id} value={id}>
+                      {schema?.columns.find((c) => c.id === id)?.label ?? id}
+                    </option>
+                  ))}
+              </select>
+              {qualifyField ? (
+                <>
+                  ≥
+                  <input
+                    type="number"
+                    min={0}
+                    value={qualifyMin ?? ''}
+                    onChange={(e) => setQualifyMin(e.target.value === '' ? null : Number(e.target.value))}
+                    className="w-14 bg-transparent text-sm outline-none"
+                  />
+                </>
+              ) : null}
+            </label>
+          ) : null}
           {hasWeek && weeklyBreakdownOptions.length > 0 ? (
             <label className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 light:border-slate-200 bg-slate-900/60 light:bg-white px-3 py-2 text-sm text-slate-300 light:text-slate-600">
               <CalendarRange className="h-4 w-4 text-slate-400 light:text-slate-500" />
@@ -441,7 +549,7 @@ export function PlayersExplorer({
               </>
             ) : null}
           </div>
-          {schema && queryData && !breakdownActive ? (
+          {schema && queryData && !breakdownActive && !rankingsMode ? (
             <>
               <ExportButton datasetId={datasetId} filters={filterConditions} sort={effectiveSort} columns={visibleColumns} totalRows={queryData.total} />
               <ShareButton getShareableUrl={getShareableUrl} currentState={shareState} />
@@ -478,8 +586,8 @@ export function PlayersExplorer({
         />
       ) : null}
 
-      {(breakdownActive ? breakdownError : queryError) ? (
-        <ErrorBanner error={(breakdownActive ? breakdownError : queryError) as Error} />
+      {(breakdownActive ? breakdownError : rankingsMode ? rankingsError : queryError) ? (
+        <ErrorBanner error={(breakdownActive ? breakdownError : rankingsMode ? rankingsError : queryError) as Error} />
       ) : null}
 
       {schemaLoading || !schema ? (
@@ -489,14 +597,14 @@ export function PlayersExplorer({
             <p className="text-sm text-slate-400 light:text-slate-500">Loading player data…</p>
           </div>
         </div>
-      ) : chartView && !breakdownActive ? (
+      ) : chartView && !breakdownActive && !rankingsMode ? (
         <StatCharts schema={schema} queryData={queryData} visibleColumns={visibleColumns} />
       ) : (
         <>
           <ExpandablePanel title="Players">
             <DataTable
-              rows={(breakdownActive ? breakdownData?.rows : queryData?.rows) ?? []}
-              columns={(breakdownActive ? breakdownColumns : queryData?.columns) ?? visibleColumns}
+              rows={(breakdownActive ? breakdownData?.rows : rankingsMode ? rankingsData?.rows : queryData?.rows) ?? []}
+              columns={(breakdownActive ? breakdownColumns : rankingsMode ? rankingsData?.columns : queryData?.columns) ?? visibleColumns}
               columnMeta={breakdownActive ? breakdownColumnMeta : schema.columns}
               columnGroups={breakdownActive ? breakdownColumnGroups : undefined}
               sorting={sorting}
@@ -504,7 +612,7 @@ export function PlayersExplorer({
                 setSorting(next)
                 setManualSort(true)
               }}
-              loading={breakdownActive ? breakdownFetching : isFetching}
+              loading={breakdownActive ? breakdownFetching : rankingsMode ? rankingsFetching : isFetching}
               pinFirstColumn
               rankOffset={(page - 1) * PAGE_SIZE}
               onRowClick={(row) => {
@@ -512,15 +620,17 @@ export function PlayersExplorer({
                 if (name) setDetailPlayer(name)
               }}
               rowLabel={(row) => `View ${String(row.player_display_name ?? '')}`}
+              rankingsMode={rankingsMode}
+              onToggleRankings={breakdownActive ? undefined : () => setRankingsMode((v) => !v)}
             />
           </ExpandablePanel>
 
-          {!breakdownActive && queryData ? (
+          {!breakdownActive && !rankingsMode && queryData ? (
             <DataQualityIndicator datasetId={datasetId} filters={filterConditions} totalRows={queryData.total} />
           ) : null}
           {breakdownActive && breakdownData ? (
             <QuickStats rows={breakdownData.rows} columns={breakdownColumns} />
-          ) : !breakdownActive && queryData ? (
+          ) : !breakdownActive && !rankingsMode && queryData ? (
             <QuickStats rows={queryData.rows} columns={queryData.columns} />
           ) : null}
 

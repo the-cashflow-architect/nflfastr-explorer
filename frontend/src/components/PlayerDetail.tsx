@@ -12,6 +12,7 @@ interface PlayerDetailProps {
   datasetId: string
   schema: DatasetSchema
   playerName: string
+  onTeamClick?: (team: string) => void
 }
 
 // A cockpit page fetches its own broad column set rather than depending on
@@ -56,7 +57,7 @@ const CANDIDATE_SUMMARY_STATS = [
   'fantasy_points_ppr',
 ]
 
-export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProps) {
+export function PlayerDetail({ datasetId, schema, playerName, onTeamClick }: PlayerDetailProps) {
   const [selectedStat, setSelectedStat] = useState<string | null>(null)
   const [compareStats, setCompareStats] = useState<string[] | null>(null)
 
@@ -180,7 +181,27 @@ export function PlayerDetail({ datasetId, schema, playerName }: PlayerDetailProp
           <div>
             <h2 className="text-2xl font-bold text-white light:text-slate-900">{playerName}</h2>
             <div className="mt-1 flex flex-wrap gap-4 text-sm text-slate-400 light:text-slate-500">
-              {position ? <span>{position}{latestTeam ? ` · ${latestTeam}` : ''}</span> : null}
+              {position ? (
+                <span>
+                  {position}
+                  {latestTeam ? (
+                    <>
+                      {' · '}
+                      {onTeamClick ? (
+                        <button
+                          type="button"
+                          onClick={() => onTeamClick(latestTeam)}
+                          className="text-blue-300 light:text-blue-600 hover:text-blue-200 hover:underline underline-offset-2"
+                        >
+                          {latestTeam}
+                        </button>
+                      ) : (
+                        latestTeam
+                      )}
+                    </>
+                  ) : null}
+                </span>
+              ) : null}
               {totalGames ? (
                 <span className="inline-flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />

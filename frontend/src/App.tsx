@@ -131,7 +131,13 @@ function ExplorerApp() {
           ) : route === 'teams' ? (
             <TeamsExplorer navOpts={navOpts} onDrillToTeam={(team) => navigate('players', { team, position: 'all', statTab: 'basic' })} />
           ) : (
-            <PlaysExplorer urlState={urlState} isRestoring={isRestoring} updateUrl={updateUrl} getShareableUrl={getShareableUrl} />
+            <PlaysExplorer
+              urlState={urlState}
+              isRestoring={isRestoring}
+              updateUrl={updateUrl}
+              getShareableUrl={getShareableUrl}
+              onTeamClick={(team) => navigate('players', { team, position: 'all', statTab: 'basic' })}
+            />
           )}
         </div>
       </main>
