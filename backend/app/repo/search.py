@@ -96,6 +96,7 @@ DERIVED = derived.register(
         depends_on=("players",),
         build=_build_search_players,
         description="Normalised player names for the global search box.",
+        schema=lambda: "gsis_id,display_name,position,headshot,latest_team,first_season,last_season,search_name",
     )
 )
 

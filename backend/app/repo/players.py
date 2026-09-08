@@ -837,15 +837,20 @@ def _snap_columns(loader: Any) -> dict[str, str] | None:
     return resolved if "offense_snaps" in resolved or "defense_snaps" in resolved else None
 
 
-def _pct_sql(column: str) -> str:
+def _pct_sql(reference: str) -> str:
     """Snap share as a proportion, whatever units the file ships it in.
 
     nflverse publishes `offense_pct` as a 0-1 proportion. The rescale guard is
     here because a silent switch to whole percents would turn a 12% special-teamer
     into a starter under the 50% started-proxy, and nothing in the payload would
     look wrong.
+
+    Takes an already-quoted SQL reference (`"offense_pct"` or `s."offense_pct"`)
+    rather than a bare name: three of the four call sites need a table alias, and
+    quoting here as well produced `"s."offense_pct""`, which DuckDB rejects as a
+    zero-length identifier. Every call site was already passing a quoted string.
     """
-    return f'CASE WHEN "{column}" > 1 THEN "{column}" / 100.0 ELSE "{column}" END'
+    return f"CASE WHEN {reference} > 1 THEN {reference} / 100.0 ELSE {reference} END"
 
 
 def _latest_snap_shares(loader: Any, gsis_ids: Sequence[str]) -> dict[str, dict[str, Any]]:

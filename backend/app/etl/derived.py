@@ -43,6 +43,20 @@ class Derived:
     #: Does the work. Must be idempotent and must leave the table complete.
     build: Callable[["Loader"], None]
     description: str = ""
+    #: The shape this builder currently produces, as a short string. Compared
+    #: against the shape recorded at the last build.
+    #:
+    #: Without it, adding a column to a derived table leaves every existing
+    #: database serving the old shape forever: the table is present, its inputs
+    #: have not moved, so nothing is stale — and every query naming the new
+    #: column fails at runtime with a binder error nobody sees in tests, because
+    #: tests build their fixture from scratch every time. That is precisely how
+    #: this was found: sixteen endpoints failed against a real database while
+    #: 385 tests passed.
+    schema: Callable[[], str] | None = None
+
+    def fingerprint(self) -> str | None:
+        return self.schema() if self.schema else None
 
 
 _REGISTRY: dict[str, Derived] = {}
@@ -64,17 +78,28 @@ def get(name: str) -> Derived:
 def _ensure_log(cur) -> None:
     cur.execute(
         f"CREATE TABLE IF NOT EXISTS {DERIVED_LOG} ("
-        "  name VARCHAR NOT NULL, built_at TIMESTAMP, row_count BIGINT)"
+        "  name VARCHAR NOT NULL, built_at TIMESTAMP, row_count BIGINT,"
+        "  schema_fingerprint VARCHAR)"
     )
+    # A database written before the fingerprint existed has the older shape.
+    existing = {row[0] for row in cur.execute(f"DESCRIBE {DERIVED_LOG}").fetchall()}
+    if "schema_fingerprint" not in existing:
+        cur.execute(f"ALTER TABLE {DERIVED_LOG} ADD COLUMN schema_fingerprint VARCHAR")
 
 
 def record_build(loader: "Loader", name: str, row_count: int | None = None) -> None:
     cur = loader.cursor()
     _ensure_log(cur)
+    entry = _REGISTRY.get(name)
     cur.execute(f"DELETE FROM {DERIVED_LOG} WHERE name = ?", [name])
     cur.execute(
-        f"INSERT INTO {DERIVED_LOG} VALUES (?, ?, ?)",
-        [name, datetime.now(timezone.utc).replace(tzinfo=None), row_count],
+        f"INSERT INTO {DERIVED_LOG} VALUES (?, ?, ?, ?)",
+        [
+            name,
+            datetime.now(timezone.utc).replace(tzinfo=None),
+            row_count,
+            entry.fingerprint() if entry else None,
+        ],
     )
 
 
@@ -86,11 +111,26 @@ def built_at(loader: "Loader", name: str) -> datetime | None:
 
 
 def is_stale(loader: "Loader", derived: Derived, table: str | None = None) -> bool:
-    """Missing, never recorded, or older than one of its inputs."""
+    """Missing, never recorded, older than an input, or a different shape."""
     if table and not loader.table_exists(table):
         return True
-    built = built_at(loader, derived.name)
-    if built is None:
+    cur = loader.cursor()
+    _ensure_log(cur)
+    row = cur.execute(
+        f"SELECT built_at, schema_fingerprint FROM {DERIVED_LOG} WHERE name = ?",
+        [derived.name],
+    ).fetchone()
+    if not row or row[0] is None:
+        return True
+    built, recorded_shape = row
+    wanted_shape = derived.fingerprint()
+    if wanted_shape is not None and recorded_shape != wanted_shape:
+        logger.info(
+            "%s was built with a different shape (%s, now %s) — rebuilding",
+            derived.name,
+            recorded_shape or "unrecorded",
+            wanted_shape,
+        )
         return True
     newest_input = loader.newest_load(*derived.depends_on)
     return newest_input is not None and newest_input > built

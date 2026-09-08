@@ -1274,6 +1274,7 @@ DERIVED = derived.register(
         depends_on=("games",),
         build=lambda loader: build(loader),
         description="Team records, division finish, playoff seeding and SRS-family ratings.",
+        schema=lambda: ",".join(COLUMN_NAMES),
     )
 )
 

@@ -714,5 +714,8 @@ DERIVED = derived_registry.register(
             "totals, and situational splits — the summaries that carry every season "
             "we do not keep plays for."
         ),
+        schema=lambda: "|".join(
+            f"{t.name}:{','.join(c for c, _ in t.columns)}" for t in TABLES
+        ),
     )
 )

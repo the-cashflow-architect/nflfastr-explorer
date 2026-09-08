@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "gen:api": "cd ../backend && python -m scripts.dump_openapi ../frontend/openapi.json && cd ../frontend && openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "gen:api": "cd ../backend && python -m scripts.dump_openapi ../frontend/openapi.json && cd ../frontend && npx openapi-typescript openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",

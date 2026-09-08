@@ -63,6 +63,15 @@ class Source:
     #: Applied as a WHERE clause at load. Used to drop the single unattributed
     #: row nflverse emits in each weekly team and player file.
     where_sql: str | None = None
+    #: Extra columns copied from an existing one under a second name, as
+    #: (source column, alias). The season player files call the team column
+    #: `recent_team` while the weekly file calls it `team`; rather than make
+    #: every query that touches both remember which is which — and fail with a
+    #: binder error the first time it forgets — the alias is added here so every
+    #: table answers to `team`. The original name is kept, because `recent_team`
+    #: carries a real caveat (for a player traded mid-season it is the *last*
+    #: team, not the one he played each game for) that the glossary explains.
+    alias_columns: tuple[tuple[str, str], ...] = ()
 
     def url_for(self, season: int | None = None) -> str:
         return self.url.format(season=season) if self.grain == "season" else self.url
@@ -217,7 +226,12 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/stats_player/stats_player_reg_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
-        team_columns=("team",),
+        # The season files call the team column `recent_team`; only the weekly
+        # file has `team`. Naming the wrong one here was a silent no-op — the
+        # projection skips a column the file does not have — which left the
+        # relocated franchises keyed on codes no other table uses.
+        team_columns=("recent_team", "team"),
+        alias_columns=(("recent_team", "team"),),
     ),
     Source(
         id="player_season_post",
@@ -228,7 +242,8 @@ SOURCES: tuple[Source, ...] = (
         grain="season",
         first_season=FIRST_SEASON,
         optional=True,
-        team_columns=("team",),
+        alias_columns=(("recent_team", "team"),),
+        team_columns=("recent_team", "team"),
     ),
     Source(
         id="player_week",

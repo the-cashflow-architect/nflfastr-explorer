@@ -280,12 +280,14 @@ class Loader:
         team_cols = [c for c in source.team_columns if c in available]
 
         if not source.columns:
-            if not team_cols:
-                return "*"
-            fixes = ", ".join(
-                f'{canonical_team_sql(chr(34) + c + chr(34))} AS "{c}"' for c in team_cols
-            )
-            return f"* REPLACE ({fixes})"
+            aliases = self._aliases(source, available, team_cols)
+            base = "*"
+            if team_cols:
+                fixes = ", ".join(
+                    f'{canonical_team_sql(chr(34) + c + chr(34))} AS "{c}"' for c in team_cols
+                )
+                base = f"* REPLACE ({fixes})"
+            return ", ".join([base, *aliases]) if aliases else base
 
         keep = [c for c in source.columns if c in available]
         if not keep:
@@ -296,7 +298,21 @@ class Loader:
                 parts.append(f'{canonical_team_sql(chr(34) + c + chr(34))} AS "{c}"')
             else:
                 parts.append(f'"{c}"')
+        parts.extend(self._aliases(source, available, team_cols))
         return ", ".join(parts)
+
+    def _aliases(
+        self, source: Source, available: set[str], team_cols: list[str]
+    ) -> list[str]:
+        """Second names for columns whose spelling differs between files."""
+        out: list[str] = []
+        for origin, alias in source.alias_columns:
+            if origin not in available or alias in available:
+                continue
+            quoted = f'"{origin}"'
+            expression = canonical_team_sql(quoted) if origin in team_cols else quoted
+            out.append(f'{expression} AS "{alias}"')
+        return out
 
     def _where(self, source: Source) -> str:
         return f" WHERE {source.where_sql}" if source.where_sql else ""

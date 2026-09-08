@@ -12,6 +12,24 @@ route wiring.
 
 from __future__ import annotations
 
-from . import coverage, search
+from . import (
+    coverage,
+    draft,
+    games,
+    leaders,
+    players,
+    search,
+    seasons,
+    teams,
+)
 
-ALL_ROUTERS: tuple = (coverage.router, search.router)
+ALL_ROUTERS: tuple = (
+    coverage.router,
+    search.router,
+    players.router,
+    teams.router,
+    games.router,
+    seasons.router,
+    leaders.router,
+    draft.router,
+)
