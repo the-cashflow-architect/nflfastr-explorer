@@ -37,9 +37,10 @@ NOT_BUILDING: tuple[dict[str, str], ...] = (
         "what": "Season-by-season Approximate Value, and any AV-based similarity or Hall-of-Fame monitor",
         "why": (
             "PFR's AV is a proprietary formula with no season-level figure in any "
-            "nflverse file. We show draft_picks' career AV where it exists, labeled "
-            "as PFR's career total for drafted players only, and ship our own, "
-            "differently named similarity method instead of reimplementing it."
+            "nflverse file, and draft_picks' own car_av column — PFR's career "
+            "total — is NULL in every row it ships. We show w_av (weighted career "
+            "AV) and dr_av instead, for drafted players only, and ship our own, "
+            "differently named similarity method rather than reimplementing AV."
         ),
     },
     {
@@ -136,9 +137,10 @@ NOT_BUILDING: tuple[dict[str, str], ...] = (
     {
         "what": "Predictive game-outcome models, power ratings, and proprietary player grades",
         "why": (
-            "We publish an EPA-and-schedule-adjusted rating with its formula "
-            "stated, and nothing that claims to know the future or to grade a "
-            "player's technique from data that does not contain it."
+            "We publish a margin-of-victory-and-schedule-adjusted rating (SRS, "
+            "with OSRS/DSRS and SOS alongside it) with its formula stated, and "
+            "nothing that claims to know the future or to grade a player's "
+            "technique from data that does not contain it."
         ),
     },
     {
@@ -278,17 +280,42 @@ def _dataset_entry(
     }
 
 
-def _latest_completed_season(loader: Loader) -> int | None:
+def _latest_season_with_games(loader: Loader) -> int | None:
     """The newest season with at least one played game, straight from `games`.
 
-    Returns None rather than a guess when the schedule has not loaded yet —
-    the same honesty rule as everything else on this page.
+    This is *not* "the latest completed season" — from week 1 of a new season
+    onward it names the season currently in progress. It exists only so a
+    caller with a genuine use for "the freshest season we have any data for"
+    (as opposed to "the freshest season that is over") can ask for it by name
+    instead of reinventing this query. Returns None rather than a guess when
+    the schedule has not loaded yet.
     """
     if not loader.table_exists("games"):
         return None
     cur = loader.cursor()
     row = cur.execute(
         "SELECT max(season) FROM games WHERE home_score IS NOT NULL"
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _latest_completed_season(loader: Loader) -> int | None:
+    """The newest season whose Super Bowl has been played.
+
+    "No unplayed games remain" is the wrong test: the Bills-Bengals game
+    cancelled after Damar Hamlin's on-field cardiac arrest was never played
+    and never will be, so that season would never satisfy that test even
+    though its Super Bowl was. A played `SB` row is the definition
+    `app/etl/standings.py` already uses to decide whether to read a season's
+    seeding off the bracket versus projecting it, and reusing it here keeps
+    the two from drifting apart. Returns None rather than a guess when the
+    schedule has not loaded yet, or no season in it has reached a Super Bowl.
+    """
+    if not loader.table_exists("games"):
+        return None
+    cur = loader.cursor()
+    row = cur.execute(
+        "SELECT max(season) FROM games WHERE game_type = 'SB' AND home_score IS NOT NULL"
     ).fetchone()
     return row[0] if row else None
 
@@ -316,5 +343,6 @@ def build_coverage(loader: Any = None) -> dict[str, Any]:
         "not_building": [dict(item) for item in NOT_BUILDING],
         "disk_usage_bytes": loader.disk_usage_bytes(),
         "latest_completed_season": _latest_completed_season(loader),
+        "latest_season_with_games": _latest_season_with_games(loader),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

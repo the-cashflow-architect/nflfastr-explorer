@@ -1,12 +1,15 @@
 """Tests for the honesty payload: `app.repo.coverage` and `GET /api/coverage`.
 
-Two things this file has to prove beyond the usual behaviour: that the payload
-tells the truth about what `built_loader`'s fixture actually holds (2001 and
-2024, nothing else, for whatever we `ensure()`), and that a dataset nobody
-asked to load is reported as missing rather than as a false zero. The
-grep-for-year-literals test is the specific failure this whole endpoint exists
-to prevent, so it is checked directly against the file, not just against its
-output.
+Three things this file has to prove beyond the usual behaviour: that the
+payload tells the truth about what `built_loader`'s fixture actually holds
+(2001 and 2024, nothing else, for whatever we `ensure()`); that a dataset
+nobody asked to load is reported as missing rather than as a false zero; and
+that `latest_completed_season` (Super Bowl played) and
+`latest_season_with_games` (any game played) genuinely mean different things,
+which the base fixture alone cannot show since it always plays its SB row.
+The grep-for-year-literals test is the specific failure this whole endpoint
+exists to prevent, so it is checked directly against the file, not just
+against its output.
 """
 
 from __future__ import annotations
@@ -107,6 +110,24 @@ def test_named_windows_all_trace_back_to_sources_constants(built_loader):
         assert window["note"]
 
 
+def test_av_entry_names_the_populated_columns_not_car_av():
+    """SPEC 0.4 measured `draft_picks.car_av` as NULL in every row.
+
+    Claiming we show "career AV where it exists, labeled as PFR's career
+    total" is exactly the wrong sentence — it doesn't exist. The entry must
+    point readers at the columns that are actually populated (`w_av`,
+    `dr_av`) and must not claim car_av is usable.
+    """
+    entry = next(
+        item for item in coverage_repo.NOT_BUILDING if "Approximate Value" in item["what"]
+    )
+    why = entry["why"]
+    assert "w_av" in why
+    assert "dr_av" in why
+    assert "NULL" in why
+    assert "career AV where it exists" not in why
+
+
 def test_not_building_list_gives_a_reason_for_everything_it_names(built_loader):
     payload = coverage_repo.build_coverage(loader=built_loader)
     not_building = payload["not_building"]
@@ -122,12 +143,53 @@ def test_disk_usage_and_latest_completed_season(built_loader):
     built_loader.ensure("games")
     payload = coverage_repo.build_coverage(loader=built_loader)
     assert payload["disk_usage_bytes"] >= 0
+    # The fixture plays an SB row in both fixture seasons, so on this fixture
+    # alone "completed" and "has games" agree — the season-in-progress test
+    # below is what actually separates the two meanings.
     assert payload["latest_completed_season"] == FIXTURE_LAST
+    assert payload["latest_season_with_games"] == FIXTURE_LAST
 
 
 def test_latest_completed_season_is_none_before_games_loads(built_loader):
     payload = coverage_repo.build_coverage(loader=built_loader)
     assert payload["latest_completed_season"] is None
+    assert payload["latest_season_with_games"] is None
+
+
+def test_latest_completed_season_vs_latest_season_with_games(built_loader):
+    """Pins the two season fields' meanings apart on a season with no Super Bowl.
+
+    `built_loader`'s own fixture always plays its SB row, so it cannot exercise
+    the gap this endpoint exists to report; this test adds a season on top of
+    it that has a played regular-season game but no Super Bowl at all — the
+    shape of the real site from week 1 of a new season through conference
+    championship weekend. `latest_season_with_games` must move to that new
+    season; `latest_completed_season` must stay pinned to the last one whose
+    Super Bowl was actually played.
+    """
+    built_loader.ensure("games")
+    in_progress_season = FIXTURE_LAST + 1
+    cur = built_loader.cursor()
+    cur.execute(
+        """
+        INSERT INTO games (
+            game_id, season, game_type, week, gameday, weekday, gametime,
+            away_team, away_score, home_team, home_score, location, result,
+            roof, surface, temp, wind, away_coach, home_coach, referee,
+            stadium_id, stadium, div_game
+        ) VALUES (
+            ?, ?, 'REG', 1, DATE '2025-09-08', 'Monday', '20:00',
+            'BUF', 10, 'KC', 20, 'Home', 10,
+            'outdoors', 'grass', 68, 5, 'Coach BUF', 'Coach KC', 'Ref One',
+            'STA0', 'Stadium 0', 0
+        )
+        """,
+        [f"{in_progress_season}_01_BUF_KC", in_progress_season],
+    )
+
+    payload = coverage_repo.build_coverage(loader=built_loader)
+    assert payload["latest_season_with_games"] == in_progress_season
+    assert payload["latest_completed_season"] == FIXTURE_LAST
 
 
 def test_coverage_note_passes_through_from_the_registry(built_loader):
@@ -151,7 +213,14 @@ def test_get_api_coverage_endpoint(built_loader):
 
     assert response.status_code == 200
     body = response.json()
-    assert {"datasets", "coverage_windows", "not_building", "generated_at"} <= body.keys()
+    assert {
+        "datasets",
+        "coverage_windows",
+        "not_building",
+        "generated_at",
+        "latest_completed_season",
+        "latest_season_with_games",
+    } <= body.keys()
     ids = {row["id"] for row in body["datasets"]}
     assert "games" in ids
     games_row = next(row for row in body["datasets"] if row["id"] == "games")

@@ -74,17 +74,45 @@ UNBROKEN_NOTE = (
     "alphabetical order."
 )
 
-#: The tiebreaker ladder we actually implement, in the order it is applied, for the
-#: API to print verbatim. The real rules run seven levels deep with separate paths
-#: for two-club and three-club ties; these five settle the overwhelming majority of
-#: cases, and anything they cannot settle is labelled rather than guessed.
-TIEBREAK_RULES: tuple[str, ...] = (
+#: Which ladder settled a placement. Stored on the row, because the two are
+#: different procedures and a reader is entitled to know which one ran.
+LADDER_DIVISION = "division"
+LADDER_WILD_CARD = "wild card"
+
+#: The two ladders we implement, each in the order it is applied, for the API to
+#: print verbatim. They are not one procedure applied twice. A tie inside a division
+#: is settled by how the clubs did against each other and inside the division; a tie
+#: for a wild card is settled conference-wide, and it begins by throwing out every
+#: club but the best in each division, so two clubs from one division never compete
+#: for the same wild card. The real rules run deeper than either list — anything ours
+#: cannot settle is labelled rather than guessed.
+DIVISION_TIEBREAK_RULES: tuple[str, ...] = (
     "Win percentage",
     "Head-to-head record",
-    "Division record (clubs in the same division)",
+    "Division record",
     "Record in common games (minimum four)",
     "Conference record",
 )
+
+WILD_CARD_TIEBREAK_RULES: tuple[str, ...] = (
+    "Win percentage",
+    "Only the highest-placed club in each division is eligible",
+    "Head-to-head sweep (one club beat, or lost to, all the others)",
+    "Conference record",
+    "Record in common games (minimum four)",
+    "Strength of victory",
+)
+
+TIEBREAK_LADDERS: dict[str, tuple[str, ...]] = {
+    LADDER_DIVISION: DIVISION_TIEBREAK_RULES,
+    LADDER_WILD_CARD: WILD_CARD_TIEBREAK_RULES,
+}
+
+#: How a division title was settled. A completed bracket names its division winners
+#: outright — they are the top seeds, one per division — and where it does, no
+#: approximation of the tiebreakers should second-guess it.
+TITLE_BASIS_BRACKET = "won the division, read off the postseason bracket"
+TITLE_BASIS_LADDER = "first in the division on our tiebreaker ladder"
 
 #: Keyed by column name so `/api/coverage` and the ComputedByUs marker can look up
 #: exactly one string per number we calculate rather than read.
@@ -118,7 +146,13 @@ FORMULAS: dict[str, str] = {
     ),
     "division_rank": (
         "Order within the division by win percentage, then head-to-head, division "
-        "record, common games and conference record."
+        "record, common games and conference record. Where a completed bracket names "
+        "the division winner, that club is first and the ladder only orders the rest."
+    ),
+    "home_away_split": (
+        "Home and away records count only games with a host: a game at a neutral "
+        "site — an international game, or a Super Bowl — is in the neutral record "
+        "instead, so home + away is short of the season total by that many games."
     ),
     "playoff_seed": (
         "For a completed season, read off the bracket: the clubs with a first-round "
