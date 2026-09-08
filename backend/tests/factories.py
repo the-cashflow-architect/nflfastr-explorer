@@ -5,11 +5,19 @@ fantasy schema — most of the bugs worth catching here live in the joins betwee
 sources, and a fixture that invents its own column names cannot catch those. So
 these builders emit the real column names and the real quirks:
 
-* Two team-code dialects: `games` uses the period code (STL), the stats files use
-  the present-day one (LA).
+* Two team-code dialects, the way the real files disagree: `games.csv` writes the
+  code the team played under that year (1999 says STL, SD, OAK) while the weekly
+  stats files write the present-day one (the real stats_player_week_1999 and
+  stats_team_week_1999 carry LA, LAC and LV, and no period code at all). Nothing
+  joins until the loader canonicalises, which is the point of writing both.
 * Air-yards columns are NULL before 2006.
 * One unattributed row per weekly file, which the loader is expected to drop.
 * A column that appears only in later seasons, to exercise schema drift.
+
+One quirk deliberately *not* modelled: the real play-by-play files write the
+period code into `game_id` (`1999_03_ATL_STL`) while writing the present-day one
+into `home_team`/`away_team` (`LA`). `write_pbp` uses one dialect for both, so a
+test that needs that split has to build its own rows.
 """
 
 from __future__ import annotations
@@ -73,9 +81,15 @@ def write_games_csv(path: str, seasons=(2001, 2024)) -> str:
 
 
 def write_player_week(path: str, season: int, teams=None) -> str:
-    """Weekly player rows in the present-day code dialect, with a null-team row."""
+    """Weekly player rows in the present-day code dialect, with a null-team row.
+
+    Present-day codes in *every* season, 2001 included, because that is what the
+    real file does: stats_player_week_1999 says LA, LAC and LV and never STL, SD
+    or OAK. Picking the period codes here would have the fixture agree with
+    `games.csv` and quietly stop testing the canonicalisation that makes them join.
+    """
     con = duckdb.connect()
-    teams = teams or (TEAMS_2001 if season < 2002 else TEAMS_2024)
+    teams = teams or TEAMS_2024
     charted = season >= 2006
     team_list = ", ".join(f"'{t}'" for t in teams)
     extra = ", (i % 7)::DOUBLE AS receiving_epa" if season >= 2010 else ""
@@ -114,8 +128,9 @@ def write_player_week(path: str, season: int, teams=None) -> str:
 
 
 def write_team_week(path: str, season: int, teams=None) -> str:
+    """Weekly team rows. Present-day codes in every season — see `write_player_week`."""
     con = duckdb.connect()
-    teams = teams or (TEAMS_2001 if season < 2002 else TEAMS_2024)
+    teams = teams or TEAMS_2024
     team_list = ", ".join(f"'{t}'" for t in teams)
     return _write(
         con,
@@ -186,7 +201,15 @@ def write_teams_meta(path: str) -> str:
 
 
 def write_pbp(path: str, season: int, teams=None) -> str:
-    """Plays with real drive, EPA and win-probability columns, charted only from 2006."""
+    """Plays with real drive, EPA and win-probability columns, charted only from 2006.
+
+    The 48 plays are laid out so that all sixteen situational buckets match at
+    least one row. `yardline_100` sweeps the whole field in five-yard steps rather
+    than stopping at the 33, so `red_zone` and `goal_to_go` are populated; `wp`
+    steps outside the 5%/95% bounds six times a game, so `garbage_time` is. Before
+    that the three predicates matched nothing in either fixture season and could
+    have been silently broken for the length of a release.
+    """
     con = duckdb.connect()
     teams = teams or (TEAMS_2001 if season < 2002 else TEAMS_2024)
     charted = season >= 2006
@@ -198,10 +221,16 @@ def write_pbp(path: str, season: int, teams=None) -> str:
           {season} AS season, 1 AS week,
           '{season}_01_{away}_{home}' AS game_id,
           i + 1 AS play_id, 'REG' AS season_type,
-          CASE WHEN i % 2 = 0 THEN '{home}' ELSE '{away}' END AS posteam,
-          CASE WHEN i % 2 = 0 THEN '{away}' ELSE '{home}' END AS defteam,
+          -- Possession alternates by drive, not by snap. Keying this on `i % 2`
+          -- while the drive is six plays long put the ball back with the home team
+          -- on the first play of every drive, so `derived_drives` — which takes a
+          -- drive's team from its first play — credited all eight drives to one
+          -- club and the other club never appeared as a defence.
+          CASE WHEN i // 6 % 2 = 0 THEN '{home}' ELSE '{away}' END AS posteam,
+          CASE WHEN i // 6 % 2 = 0 THEN '{away}' ELSE '{home}' END AS defteam,
           '{home}' AS home_team, '{away}' AS away_team,
-          (i % 4) + 1 AS down, (i % 10) + 1 AS ydstogo, 80 - (i % 60) AS yardline_100,
+          (i % 4) + 1 AS down, (i % 10) + 1 AS ydstogo,
+          1 + (i * 5) % 80 AS yardline_100,
           (i / 12)::INTEGER + 1 AS qtr,
           900 - (i % 15) * 60 AS quarter_seconds_remaining,
           1800 - (i % 30) * 60 AS half_seconds_remaining,
@@ -214,8 +243,12 @@ def write_pbp(path: str, season: int, teams=None) -> str:
           0 AS special, 'Play number ' || i AS "desc",
           CASE WHEN i % 3 <> 0 THEN '00-00' || lpad((i % 6)::VARCHAR, 5, '0') END AS passer_player_id,
           CASE WHEN i % 3 <> 0 THEN 'Player ' || (i % 6) END AS passer_player_name,
-          CASE WHEN i % 3 <> 0 THEN '00-00' || lpad(((i + 2) % 6)::VARCHAR, 5, '0') END AS receiver_player_id,
-          CASE WHEN i % 3 <> 0 THEN 'Player ' || ((i + 2) % 6) END AS receiver_player_name,
+          -- No receiver on a sack, and no rusher: the real files put a sack on the
+          -- passer alone (measured — every one of the 1,392 sacks in 2024 carries
+          -- `passer_player_id` and none carries a rusher or receiver id), which is
+          -- the whole reason a quarterback's EPA per dropback includes them.
+          CASE WHEN i % 3 <> 0 AND i % 11 <> 1 THEN '00-00' || lpad(((i + 2) % 6)::VARCHAR, 5, '0') END AS receiver_player_id,
+          CASE WHEN i % 3 <> 0 AND i % 11 <> 1 THEN 'Player ' || ((i + 2) % 6) END AS receiver_player_name,
           CASE WHEN i % 3 = 0 THEN '00-00' || lpad(((i + 1) % 6)::VARCHAR, 5, '0') END AS rusher_player_id,
           CASE WHEN i % 3 = 0 THEN 'Player ' || ((i + 1) % 6) END AS rusher_player_name,
           NULL::VARCHAR AS interception_player_id, NULL::VARCHAR AS fumbled_1_player_id,
@@ -226,17 +259,25 @@ def write_pbp(path: str, season: int, teams=None) -> str:
           {'(i % 25)::DOUBLE' if charted else 'NULL::DOUBLE'} AS air_yards,
           {'(i % 9)::DOUBLE' if charted else 'NULL::DOUBLE'} AS yards_after_catch,
           ((i % 21) - 10) / 10.0 AS epa, ((i % 19) - 9) / 10.0 AS qb_epa,
-          0.3 + (i % 40) / 100.0 AS wp, 0.3 + (i % 40) / 100.0 AS home_wp,
+          -- Two blowouts either way per quarter of the game, so `garbage_time` is
+          -- symmetric here as it is in the bucket: wp is the posteam's.
+          CASE WHEN i % 16 = 5 THEN 0.03
+               WHEN i % 16 = 13 THEN 0.97
+               ELSE 0.3 + (i % 40) / 100.0 END AS wp,
+          0.3 + (i % 40) / 100.0 AS home_wp,
           ((i % 11) - 5) / 100.0 AS wpa,
           {'((i % 15) - 7)::DOUBLE' if charted else 'NULL::DOUBLE'} AS cpoe,
           CASE WHEN (i % 21) - 10 > 0 THEN 1 ELSE 0 END AS success,
-          (i / 6)::INTEGER + 1 AS series,
+          i // 6 + 1 AS series,
           CASE WHEN i % 4 = 0 THEN 1 ELSE 0 END AS series_success,
           CASE WHEN i % 17 = 0 THEN 1 ELSE 0 END AS touchdown,
           CASE WHEN i % 34 = 0 THEN 1 ELSE 0 END AS pass_touchdown,
           CASE WHEN i % 51 = 0 THEN 1 ELSE 0 END AS rush_touchdown,
-          0 AS interception, CASE WHEN i % 3 <> 0 AND i % 5 <> 0 THEN 1 ELSE 0 END AS complete_pass,
-          CASE WHEN i % 23 = 0 THEN 1 ELSE 0 END AS sack,
+          0 AS interception,
+          CASE WHEN i % 3 <> 0 AND i % 5 <> 0 AND i % 11 <> 1 THEN 1 ELSE 0 END AS complete_pass,
+          -- Sacks land on pass plays only, three a game. They used to fall on
+          -- `i % 23 = 0`, which put one on a run and made another a completed pass.
+          CASE WHEN i % 3 <> 0 AND i % 11 = 1 THEN 1 ELSE 0 END AS sack,
           CASE WHEN i % 4 = 0 THEN 1 ELSE 0 END AS first_down,
           0 AS fumble_lost, 0 AS safety, 0 AS two_point_attempt,
           CASE WHEN i % 29 = 0 THEN 1 ELSE 0 END AS field_goal_attempt,
@@ -244,12 +285,16 @@ def write_pbp(path: str, season: int, teams=None) -> str:
           CASE WHEN i % 31 = 0 THEN 1 ELSE 0 END AS punt_attempt,
           0 AS kickoff_attempt, 0 AS extra_point_attempt,
           CASE WHEN i % 17 = 0 THEN 1 ELSE 0 END AS sp,
-          (i / 6)::INTEGER + 1 AS fixed_drive,
-          ['Touchdown','Punt','Field goal','Turnover on downs'][((i / 6)::INTEGER % 4) + 1] AS fixed_drive_result,
+          -- Integer division, not `/`: DuckDB's `/` is float division and the cast
+          -- rounds, so `(i / 6)::INTEGER` first steps at i = 3 and cuts these 48
+          -- plays into nine ragged drives instead of eight of six — which made
+          -- `drive_play_count` below a lie about the fixture's own rows.
+          i // 6 + 1 AS fixed_drive,
+          ['Touchdown','Punt','Field goal','Turnover on downs'][(i // 6 % 4) + 1] AS fixed_drive_result,
           6 AS drive_play_count, '3:20' AS drive_time_of_possession,
           2 AS drive_first_downs,
-          CASE WHEN i % 2 = 0 THEN '{home} 25' ELSE '{away} 30' END AS drive_start_yard_line,
-          CASE WHEN i % 2 = 0 THEN '{away} 40' ELSE '50' END AS drive_end_yard_line,
+          CASE WHEN i // 6 % 2 = 0 THEN '{home} 25' ELSE '{away} 30' END AS drive_start_yard_line,
+          CASE WHEN i // 6 % 2 = 0 THEN '{away} 40' ELSE '50' END AS drive_end_yard_line,
           '15:00' AS drive_game_clock_start,
           CASE WHEN i % 3 = 0 THEN 1 ELSE 0 END AS drive_inside20,
           CASE WHEN i % 4 = 0 THEN 1 ELSE 0 END AS drive_ended_with_score

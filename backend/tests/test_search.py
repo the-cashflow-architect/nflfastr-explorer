@@ -32,6 +32,51 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+class _CountingCursor:
+    """Wraps a real DuckDB cursor to record how many rows `fetchall()` actually
+    returned for any query whose SQL text contains `substring`.
+
+    This is the only way to tell a real SQL `LIMIT` from a bigger fetch sliced
+    down in Python afterwards — both produce the same-length final payload, so
+    asserting on the payload alone proves nothing about where the limiting
+    happened.
+    """
+
+    def __init__(self, real, counts: list[int], substring: str) -> None:
+        self._real = real
+        self._counts = counts
+        self._substring = substring
+        self._last_sql = ""
+
+    def execute(self, sql, *args, **kwargs):
+        self._last_sql = sql
+        self._real.execute(sql, *args, **kwargs)
+        return self
+
+    def fetchall(self):
+        rows = self._real.fetchall()
+        if self._substring in self._last_sql:
+            self._counts.append(len(rows))
+        return rows
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def _watch_fetches(built_loader, monkeypatch, substring: str) -> list[int]:
+    """Record, for the life of the monkeypatch, the row count `fetchall()`
+    returned on every query whose SQL mentions `substring`.
+    """
+    counts: list[int] = []
+    real_cursor_factory = built_loader.cursor
+    monkeypatch.setattr(
+        built_loader,
+        "cursor",
+        lambda: _CountingCursor(real_cursor_factory(), counts, substring),
+    )
+    return counts
+
+
 # --- shape and the empty-query contract --------------------------------------
 
 
@@ -48,18 +93,45 @@ def test_nonsense_query_returns_empty_groups_not_an_error(built_loader):
     assert all(g["items"] == [] for g in payload["groups"])
 
 
-def test_limit_is_enforced_in_sql_not_by_slicing_a_bigger_fetch(built_loader):
+def test_player_limit_is_enforced_in_sql_not_by_slicing_a_bigger_fetch(built_loader, monkeypatch):
     built_loader.ensure("players")
     cur = built_loader.cursor()
-    for gsis_id, name in cur.execute("SELECT gsis_id, display_name FROM players").fetchall():
+    ids = [r[0] for r in cur.execute("SELECT gsis_id FROM players").fetchall()]
+    assert len(ids) > 2, "fixture needs more matches than the limit to prove anything"
+    for gsis_id in ids:
         cur.execute(
             "UPDATE players SET display_name = 'Sample Player', last_season = 2024 "
             "WHERE gsis_id = ?",
             [gsis_id],
         )
+
+    fetch_counts = _watch_fetches(built_loader, monkeypatch, search_repo.SEARCH_PLAYERS_TABLE)
     payload = search_repo.search("sample", limit=2, loader=built_loader)
     players = next(g for g in payload["groups"] if g["type"] == "player")["items"]
     assert len(players) == 2
+    # The query against `search_players` itself must have returned exactly 2
+    # rows from DuckDB — not `len(ids)` rows sliced down to 2 in Python.
+    assert fetch_counts == [2]
+
+
+def test_team_group_fetches_the_whole_table_and_limits_in_python(built_loader, monkeypatch):
+    """The teams group is the deliberate exception (see the module docstring):
+    32 fixed rows costs nothing to fetch whole and filter in Python, where the
+    alias/era logic already lives. Proven, not assumed: watch what `teams_meta`'s
+    own cursor returns and confirm it is every row, not `limit` of them.
+    """
+    built_loader.ensure("teams_meta")
+    cur = built_loader.cursor()
+    n_teams = len(cur.execute("SELECT team_abbr FROM teams_meta").fetchall())
+    assert n_teams > 1, "fixture needs more teams than the limit to prove anything"
+
+    # Every fixture team's name is "<code> Football Club" (see factories.py),
+    # so "football" matches all of them — the widest possible team query.
+    fetch_counts = _watch_fetches(built_loader, monkeypatch, "teams_meta")
+    payload = search_repo.search("football", limit=1, loader=built_loader)
+    teams = next(g for g in payload["groups"] if g["type"] == "team")["items"]
+    assert len(teams) == 1
+    assert fetch_counts == [n_teams]
 
 
 # --- players -------------------------------------------------------------------
@@ -173,7 +245,68 @@ def test_current_code_historical_code_and_historical_name_all_resolve_to_one_fra
 def test_team_result_always_carries_the_current_franchise_code(built_loader):
     payload = search_repo.search("STL", loader=built_loader)
     teams = next(g for g in payload["groups"] if g["type"] == "team")["items"]
-    assert teams and all(t["abbr"] == "LA" for t in teams if t["href"] == "/teams/LA")
+    assert [t["abbr"] for t in teams] == ["LA"]
+    assert not any(t["abbr"] == "STL" for t in teams)
+
+
+def test_a_non_current_code_sitting_in_teams_meta_itself_merges_into_the_current_franchise(
+    built_loader,
+):
+    """`teams_meta` has no `team_columns` (see `sources.py`), so its `team_abbr`
+    never passes through `canonical_team_sql` at load time — it is the one place
+    a historical code could reach `teams_meta` unmapped. If it ever does, that
+    row must merge into the current franchise, not surface as a second, dead
+    `/teams/STL` result with a stale name.
+    """
+    built_loader.ensure("teams_meta")
+    cur = built_loader.cursor()
+    cur.execute(
+        "INSERT INTO teams_meta "
+        "(team_abbr, team_name, team_nick, team_conf, team_division, "
+        " team_color, team_color2, team_logo_espn, team_logo_squared, team_wordmark) "
+        "VALUES ('STL', 'St. Louis Rams (stale row)', 'Rams', 'NFC', 'NFC West', "
+        " '#000000', '#ffffff', NULL, NULL, NULL)"
+    )
+
+    payload = search_repo.search("STL", loader=built_loader)
+    teams = next(g for g in payload["groups"] if g["type"] == "team")["items"]
+    assert [t["abbr"] for t in teams] == ["LA"]
+    assert [t["href"] for t in teams] == ["/teams/LA"]
+    # The current-era row's name wins over the stale duplicate's.
+    assert teams[0]["label"] == "LA Football Club"
+
+    payload = search_repo.search("LA", loader=built_loader)
+    teams = next(g for g in payload["groups"] if g["type"] == "team")["items"]
+    assert [t["abbr"] for t in teams].count("LA") == 1  # one row, not one per teams_meta row
+
+
+def test_team_table_is_built_once_per_loader_not_once_per_group_or_request(
+    built_loader, monkeypatch
+):
+    """`_team_records`/`_team_table` used to re-read `teams_meta` and rebuild all
+    32 alias token sets on every call — up to four times in one request. Proven
+    by counting calls to `_team_tokens`, which only ever runs while the table is
+    being built: across two whole requests it must run exactly once per team.
+    """
+    built_loader.ensure("teams_meta")
+    n_teams = len(built_loader.cursor().execute("SELECT team_abbr FROM teams_meta").fetchall())
+
+    calls: list[None] = []
+    original = search_repo._team_tokens
+
+    def counting(*args, **kwargs):
+        calls.append(None)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(search_repo, "_team_tokens", counting)
+
+    # Touches the team group and (via the year+text pattern) the team_season group.
+    search_repo.search("LA 2001", loader=built_loader)
+    # Touches the team group again and, via the matchup pattern, resolves two
+    # more team codes through `_resolve_team_code`.
+    search_repo.search("BUF at KC", loader=built_loader)
+
+    assert len(calls) == n_teams
 
 
 def test_team_abbreviation_and_nickname_match(built_loader):

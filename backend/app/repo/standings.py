@@ -23,7 +23,13 @@ from typing import Any, Iterable, Literal, Sequence
 
 from ..deps import get_loader
 from ..etl import alignment, standings as standings_etl
-from ..etl.standings import FORMULAS, TABLE, TIEBREAK_RULES
+from ..etl.standings import (
+    DIVISION_TIEBREAK_RULES,
+    FORMULAS,
+    TABLE,
+    TIEBREAK_LADDERS,
+    WILD_CARD_TIEBREAK_RULES,
+)
 
 Grouping = Literal["division", "conference", "league"]
 
@@ -33,11 +39,13 @@ _SELECT = """
     season, team, conference, division, games, wins, losses, ties,
     points_for, points_against, point_differential,
     home_wins, home_losses, home_ties, away_wins, away_losses, away_ties,
+    neutral_wins, neutral_losses, neutral_ties,
     division_wins, division_losses, division_ties,
     conference_wins, conference_losses, conference_ties,
     streak_kind, streak_length, longest_win_streak,
-    division_rank, won_division, playoff_seed, seed_basis, projected,
-    tiebreak_note, made_playoffs, playoff_round, playoff_result,
+    division_rank, won_division, division_title_basis,
+    playoff_seed, seed_basis, projected,
+    tiebreak_note, tiebreak_ladder, made_playoffs, playoff_round, playoff_result,
     playoff_wins, playoff_losses, srs, osrs, dsrs, sos, pythagorean_wins,
     season_completed
 """
@@ -60,7 +68,16 @@ _RANKED: tuple[tuple[str, bool], ...] = (
 _FORMULA_KEYS: tuple[str, ...] = (
     "win_pct", "mov", "srs", "sos", "osrs", "dsrs", "pythagorean_wins",
     "division_rank", "playoff_seed", "point_differential", "longest_win_streak",
+    "home_away_split",
 )
+
+
+def tiebreak_rules() -> dict[str, list[str]]:
+    """Both ladders, named. The league uses two procedures and so do we."""
+    return {
+        "division": list(DIVISION_TIEBREAK_RULES),
+        "wild_card": list(WILD_CARD_TIEBREAK_RULES),
+    }
 
 
 def formulas() -> dict[str, str]:
@@ -79,16 +96,30 @@ def _split(wins: int, losses: int, ties: int) -> str:
     return f"{wins}-{losses}-{ties}"
 
 
+def _neutral_note(wins: int, losses: int, ties: int) -> str | None:
+    """Why home and away do not add up, on the rows where they do not."""
+    games = wins + losses + ties
+    if not games:
+        return None
+    played, counts = ("game", "counts") if games == 1 else ("games", "count")
+    return (
+        f"{games} {played} at a neutral site ({_split(wins, losses, ties)}) "
+        f"{counts} towards neither the home nor the away split."
+    )
+
+
 def _row_to_dict(row: Sequence[Any]) -> dict[str, Any]:
     (
         season, team, conference, division, games, wins, losses, ties,
         points_for, points_against, point_differential,
         home_wins, home_losses, home_ties, away_wins, away_losses, away_ties,
+        neutral_wins, neutral_losses, neutral_ties,
         division_wins, division_losses, division_ties,
         conference_wins, conference_losses, conference_ties,
         streak_kind, streak_length, longest_win_streak,
-        division_rank, won_division, playoff_seed, seed_basis, projected,
-        tiebreak_note, made_playoffs, playoff_round, playoff_result,
+        division_rank, won_division, division_title_basis,
+        playoff_seed, seed_basis, projected,
+        tiebreak_note, tiebreak_ladder, made_playoffs, playoff_round, playoff_result,
         playoff_wins, playoff_losses, srs, osrs, dsrs, sos, pythagorean_wins,
         season_completed,
     ) = row
@@ -114,6 +145,9 @@ def _row_to_dict(row: Sequence[Any]) -> dict[str, Any]:
         "mov": None if not games else point_differential / games,
         "home": _split(home_wins, home_losses, home_ties),
         "away": _split(away_wins, away_losses, away_ties),
+        "neutral": _split(neutral_wins, neutral_losses, neutral_ties),
+        "neutral_games": neutral_wins + neutral_losses + neutral_ties,
+        "neutral_note": _neutral_note(neutral_wins, neutral_losses, neutral_ties),
         "div": _split(division_wins, division_losses, division_ties),
         "conf": _split(conference_wins, conference_losses, conference_ties),
         "home_pct": _win_pct(home_wins, home_losses, home_ties),
@@ -126,10 +160,18 @@ def _row_to_dict(row: Sequence[Any]) -> dict[str, Any]:
         "longest_win_streak": longest_win_streak,
         "division_rank": division_rank,
         "won_division": bool(won_division),
+        "division_title_basis": division_title_basis,
         "seed": playoff_seed,
         "seed_basis": seed_basis,
         "projected": bool(projected),
         "tiebreak_note": tiebreak_note,
+        # Which of the league's two procedures produced the note above, and the
+        # ladder itself, so a row that says "conference record" is not read as the
+        # division rule of the same name.
+        "tiebreak_ladder": tiebreak_ladder,
+        "tiebreak_rules_applied": (
+            None if tiebreak_ladder is None else list(TIEBREAK_LADDERS[tiebreak_ladder])
+        ),
         "made_playoffs": bool(made_playoffs),
         "playoff_round": playoff_round,
         "playoff_result": playoff_result,
@@ -205,7 +247,7 @@ def season_standings(
             "projected": False,
             "season_completed": False,
             "playoff_seeds": alignment.playoff_seeds(season),
-            "tiebreak_rules_implemented": list(TIEBREAK_RULES),
+            "tiebreak_rules_implemented": tiebreak_rules(),
             "formulas": formulas(),
             "note": "No games have been played in this season yet.",
         }
@@ -255,19 +297,41 @@ def season_standings(
         "projected": projected,
         "season_completed": completed,
         "playoff_seeds": alignment.playoff_seeds(season),
-        "tiebreak_rules_implemented": list(TIEBREAK_RULES),
+        "tiebreak_rules_implemented": tiebreak_rules(),
         "formulas": formulas(),
-        "note": _seeding_note(completed, projected, seeded),
+        "note": _notes(rows, completed=completed, projected=projected, seeded=seeded),
     }
+
+
+def _notes(
+    rows: Sequence[dict[str, Any]], *, completed: bool, projected: bool, seeded: bool
+) -> str:
+    """The page's standing caveats: where the seeds came from, and what is missing
+    from the home and away columns."""
+    note = _seeding_note(completed, projected, seeded)
+    neutral = sum(row["neutral_games"] for row in rows)
+    if neutral:
+        # Halved because a neutral-site game is one game and two rows.
+        games = neutral // 2
+        played, counts = ("game was", "counts") if games == 1 else ("games were", "count")
+        note += (
+            f" {games} {played} played at a neutral site and {counts} towards "
+            "neither the home nor the away split, so those two columns do not add "
+            "up to the season."
+        )
+    return note
 
 
 def _seeding_note(completed: bool, projected: bool, seeded: bool) -> str:
     if projected:
         return (
-            "This season is still being played. Seeds are projected from win "
-            "percentage, then head-to-head, division record, common games and "
-            "conference record; ties our implemented rules cannot break are marked "
-            "and left in alphabetical order."
+            "This season is still being played. Seeds are projected: each division "
+            "is ordered by win percentage, then head-to-head, division record, "
+            "common games and conference record, and the winners and wild-card "
+            "contenders by the conference ladder — one club per division at a time, "
+            "then head-to-head sweep, conference record, common games and strength "
+            "of victory. Ties our implemented rules cannot break are marked and "
+            "left in alphabetical order."
         )
     if completed and seeded:
         return (
@@ -299,7 +363,7 @@ def team_season_record(team: str, season: int, *, loader: Any = None) -> dict[st
     for row in season_rows:
         if row["team"] == code:
             row["formulas"] = formulas()
-            row["tiebreak_rules_implemented"] = list(TIEBREAK_RULES)
+            row["tiebreak_rules_implemented"] = tiebreak_rules()
             return row
     return None
 

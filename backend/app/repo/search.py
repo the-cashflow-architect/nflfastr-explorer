@@ -22,6 +22,7 @@ against the table's own max, both computed at query time; nothing here stores a
 from __future__ import annotations
 
 import re
+import weakref
 from dataclasses import dataclass
 from typing import Any
 
@@ -156,18 +157,13 @@ class _TeamRecord:
     logo: str | None
 
 
-def _team_records(loader: Any) -> list[_TeamRecord]:
-    """Every current franchise, straight from `teams_meta`.
-
-    32 rows, fixed for the life of the league — see the module docstring for
-    why this is fetched whole rather than filtered in SQL.
-    """
-    loader.ensure("teams_meta")
-    cur = loader.cursor()
-    rows = cur.execute(
-        "SELECT team_abbr, team_name, team_nick, team_logo_squared FROM teams_meta"
-    ).fetchall()
-    return [_TeamRecord(abbr, name, nick, logo) for abbr, name, nick, logo in rows]
+#: (record, lowercased search tokens) for every current franchise. Built once per
+#: `Loader` and reused — see `_team_table` — because both `teams_meta` and the
+#: alias table are fixed for the life of the process; a `WeakKeyDictionary` so a
+#: test's throwaway loader (a fresh one per case, see `conftest.built_loader`)
+#: never leaks its team table into the next test or outlives the loader itself.
+_TeamEntry = tuple[_TeamRecord, tuple[str, ...]]
+_TEAM_TABLE_CACHE: "weakref.WeakKeyDictionary[Any, list[_TeamEntry]]" = weakref.WeakKeyDictionary()
 
 
 def _historical_label(current: str, alias: str, current_name: str) -> str | None:
@@ -187,21 +183,72 @@ def _historical_label(current: str, alias: str, current_name: str) -> str | None
     return None
 
 
-def _team_tokens(record: _TeamRecord) -> list[str]:
-    """Every string a visitor might type for this franchise: current and every alias."""
-    tokens = {record.abbr, record.name, record.nick}
+def _team_tokens(record: _TeamRecord, legacy_codes: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Every string a visitor might type for this franchise: current and every alias.
+
+    `legacy_codes` folds in whatever raw abbreviations `teams_meta` itself used
+    for this franchise before dedupe (see `_team_table`) — on top of the alias
+    table's own codes and historical names, which cover a franchise move even
+    when `teams_meta` never carried the old code at all.
+    """
+    tokens = {record.abbr, record.name, record.nick, *legacy_codes}
     for alias in alignment.alias_group(record.abbr):
         tokens.add(alias)
         label = _historical_label(record.abbr, alias, record.name)
         if label:
             tokens.add(label)
-    return [t for t in tokens if t]
+    return tuple(sorted({t.lower() for t in tokens if t}))
+
+
+def _team_table(loader: Any) -> list[_TeamEntry]:
+    """Every current franchise, straight from `teams_meta` — computed once per loader.
+
+    32 rows, fixed for the life of the league — see the module docstring for why
+    the whole table is fetched once rather than filtered in SQL per query. Cached
+    here rather than re-fetched: `_search_teams`, `_search_team_seasons` and
+    `_resolve_team_code` can all touch this table in the same request.
+
+    `teams_meta` is the one registered source with no `team_columns` (see
+    `sources.py`), so its `team_abbr` never passes through `canonical_team_sql`
+    at load time — it is the one place a non-current code could still reach a
+    URL. Every abbreviation is run through `alignment.current_code()` here, and
+    rows that collapse onto the same franchise are merged into one record
+    (keeping the current-era row's name) rather than emitted as a second, dead
+    result for the old code.
+    """
+    cached = _TEAM_TABLE_CACHE.get(loader)
+    if cached is not None:
+        return cached
+
+    loader.ensure("teams_meta")
+    cur = loader.cursor()
+    rows = cur.execute(
+        "SELECT team_abbr, team_name, team_nick, team_logo_squared FROM teams_meta"
+    ).fetchall()
+
+    current_rows: dict[str, tuple[str, str, str, str | None]] = {}
+    legacy_codes: dict[str, set[str]] = {}
+    for abbr, name, nick, logo in rows:
+        current = alignment.current_code(abbr) or abbr
+        legacy_codes.setdefault(current, set()).add(abbr)
+        # A row whose own abbr already IS the current code carries the
+        # current-era name; prefer it over whatever a stale duplicate says.
+        if current not in current_rows or abbr == current:
+            current_rows[current] = (current, name, nick, logo)
+
+    table: list[_TeamEntry] = []
+    for code in sorted(current_rows):
+        abbr, name, nick, logo = current_rows[code]
+        record = _TeamRecord(abbr, name, nick, logo)
+        legacy = tuple(sorted(legacy_codes[code] - {code}))
+        table.append((record, _team_tokens(record, legacy)))
+    _TEAM_TABLE_CACHE[loader] = table
+    return table
 
 
 def _search_teams(loader: Any, term: str, limit: int) -> list[dict[str, Any]]:
     ranked: list[tuple[bool, _TeamRecord]] = []
-    for record in _team_records(loader):
-        tokens = [t.lower() for t in _team_tokens(record)]
+    for record, tokens in _team_table(loader):
         matched = [t for t in tokens if term in t]
         if not matched:
             continue
@@ -240,10 +287,9 @@ def _search_team_seasons(loader: Any, raw_query: str, limit: int) -> list[dict[s
 
     playing_teams = set(alignment.teams_in_season(year))
     items = []
-    for record in _team_records(loader):
+    for record, tokens in _team_table(loader):
         if record.abbr not in playing_teams:
             continue  # the alignment table is the only source of "did this team exist yet"
-        tokens = [t.lower() for t in _team_tokens(record)]
         if not any(remainder in t for t in tokens):
             continue
         label = alignment.label_in_season(record.abbr, year, record.name)
@@ -269,8 +315,7 @@ def _resolve_team_code(loader: Any, text: str) -> str | None:
     if not text:
         return None
     fallback: str | None = None
-    for record in _team_records(loader):
-        tokens = [t.lower() for t in _team_tokens(record)]
+    for record, tokens in _team_table(loader):
         if text in tokens:
             return record.abbr
         if fallback is None and any(text in t for t in tokens):

@@ -22,6 +22,23 @@ real storage for a split nobody sorts by.
 Roles are offence only. A defender has no `passer_player_id`, `rusher_player_id`
 or `receiver_player_id`, so a defensive split built from these columns would be
 empty rather than wrong — the Splits page hides itself instead.
+
+**The passer role includes sacks.** A review claimed `passer_player_id` is NULL on
+sacks — the raw-feed behaviour nflfastR added its own `passer_id` to work around.
+Measured against the published files, it is not: of 1,297 sacks in 1999, 1,234 in
+2005, 1,202 in 2006, 1,250 in 2015 and 1,392 in 2024, **none** has a NULL
+`passer_player_id`, and the passer frame's sack total equals the season's sack
+total exactly. So a quarterback's EPA per dropback already carries the plays that
+hurt him most, and `sacks` / `sack_epa` are written alongside it so a reader can
+see how much of the total is sacks rather than take it on trust.
+
+What `passer_player_id` does drop is the **scramble**: 1,211 of 1,211 in 2024 and
+984 of 986 in 1999 have no passer id. Those plays are not lost — they carry
+`rusher_player_id` for the same quarterback, so a scramble is filed under his
+Rushing row, which is where a run belongs. The one column that would credit both
+under Passing is `passer_id`, and it is not in `sources.PBP_COLUMNS`; it also
+carries 1,288 penalty-negated `no_play` rows in 2024, which are nobody's
+production.
 """
 
 from __future__ import annotations
@@ -54,10 +71,19 @@ class Role:
     #: Touchdowns credited to this role. A passer must not be credited with a
     #: pick-six, so this is never the play-level `touchdown` flag.
     touchdown_column: str
+    #: The EPA column this role is charged with. `epa` is the play's; `qb_epa` is
+    #: nflfastR's passer-credit variant of it.
+    epa_column: str = "epa"
 
 
 ROLES: tuple[Role, ...] = (
-    Role("passer", "Passing", "passer_player_id", "pass_touchdown"),
+    # `qb_epa`, not `epa`: measured on the published files, the two are identical
+    # on every passer play except a lost fumble — 62 plays worth +293.6 EPA in
+    # 2024, 64 worth +288.5 in 1999 — where `epa` charges the quarterback for a
+    # receiver coughing the ball up after the catch and `qb_epa` stops at the
+    # catch. They agree to the last decimal on all 1,392 sacks in 2024, so this
+    # is a fumble convention, not a way of hiding a sack.
+    Role("passer", "Passing", "passer_player_id", "pass_touchdown", "qb_epa"),
     Role("rusher", "Rushing", "rusher_player_id", "rush_touchdown"),
     Role("receiver", "Receiving", "receiver_player_id", "pass_touchdown"),
 )

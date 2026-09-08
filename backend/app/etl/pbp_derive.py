@@ -24,6 +24,15 @@ career split can be a SUM over season rows instead of an average of averages
 (SPEC 0.7). `derived_player_season_situational` exists precisely so that a
 fifteen-season career split is a few hundred narrow rows to add up rather than a
 scan of every play the player was on the field for.
+
+**The passer role's convention, stated rather than implied.** A passer row counts
+every play carrying `passer_player_id` — which, measured on the published files
+for 1999, 2005, 2006, 2015 and 2024, is every sack (6,375 of them, none with a
+NULL passer id) and no scramble (a scramble carries `rusher_player_id` instead and
+is filed under Rushing). Its EPA is `qb_epa`, nflfastR's passer-credit column;
+`buckets.ROLES` records why. Both player tables carry `sacks` and `sack_epa` next
+to the totals, so "how much of this quarterback's EPA is him being sacked" is a
+column rather than a reconstruction.
 """
 
 from __future__ import annotations
@@ -63,6 +72,20 @@ class DerivedTable:
     def ddl(self) -> str:
         body = ", ".join(f'"{name}" {dtype}' for name, dtype in self.columns)
         return f"CREATE TABLE IF NOT EXISTS {self.name} ({body})"
+
+    def widen_sql(self) -> tuple[str, ...]:
+        """Add columns this table gained since the database on disk was built.
+
+        `CREATE TABLE IF NOT EXISTS` is a no-op against a table that already
+        exists, so adding a column here would otherwise leave a deployed database
+        one column short and fail every insert — the derived rows name their
+        columns explicitly. The rows themselves are rewritten season by season on
+        the next build, so the added column is NULL only until then.
+        """
+        return tuple(
+            f'ALTER TABLE {self.name} ADD COLUMN IF NOT EXISTS "{name}" {dtype}'
+            for name, dtype in self.columns
+        )
 
     def insert_sql(self, relation: str, season: int) -> str:
         cols = ", ".join(f'"{c}"' for c in self.column_names)
@@ -357,12 +380,19 @@ LEFT JOIN drive_roll d ON d.game_id = a.game_id AND d.team = a.team
 
 
 def _role_rows_sql(columns: str) -> str:
-    """One SELECT per offensive role, unioned into a long player-play frame."""
+    """One SELECT per offensive role, unioned into a long player-play frame.
+
+    `role_epa` rather than `epa` because the passer is charged `qb_epa` and the
+    other two the play's own EPA; naming it once here is what keeps the two player
+    tables from drifting into different conventions. `role_sack` rides along so
+    the sack share of that EPA is a stored count instead of a claim.
+    """
     parts = []
     for r in ROLES:
         parts.append(
             f"  SELECT {r.id_column} AS gsis_id, '{r.key}' AS role,"
-            f" {r.touchdown_column} AS role_touchdown, {columns}"
+            f" {r.touchdown_column} AS role_touchdown,"
+            f" {r.epa_column} AS role_epa, sack AS role_sack, {columns}"
             f"  FROM p WHERE {r.id_column} IS NOT NULL"
         )
     return "\n  UNION ALL\n".join(parts)
@@ -374,7 +404,7 @@ def _player_game_epa_sql(relation: str, season: int) -> str:
     # COALESCE(...,0) here would turn "nobody charted it" into "he threw it at the
     # line of scrimmage" for seven seasons. Rushing rows are NULL for the same
     # reason in every season: a run has no air yards.
-    columns = "game_id, play_id, week, posteam, epa, success, air_yards"
+    columns = "game_id, play_id, week, posteam, success, air_yards"
     return f"""
 WITH {_source(relation, season)},
 r AS (
@@ -388,9 +418,13 @@ SELECT
   role,
   arg_min(posteam, play_id) AS team,
   count(*) AS plays,
-  sum(CAST(epa AS DOUBLE)) AS epa_total,
+  sum(CAST(role_epa AS DOUBLE)) AS epa_total,
   sum(CAST(success AS INTEGER)) AS successes,
-  sum(CAST(air_yards AS DOUBLE)) AS air_yards_total
+  sum(CAST(air_yards AS DOUBLE)) AS air_yards_total,
+  sum(CAST(role_sack AS INTEGER)) AS sacks,
+  -- NULL, not 0, when the role took no sack in the game: a rusher's sack EPA is
+  -- a sum over no plays, which is a gap rather than a total of nothing.
+  sum(CAST(role_epa AS DOUBLE)) FILTER (WHERE role_sack = 1) AS sack_epa
 FROM r
 GROUP BY game_id, gsis_id, role
 """
@@ -404,7 +438,7 @@ def _situational_sql(relation: str, season: int) -> str:
     # is deliberately not a GROUP BY over a bucket column: a play belongs to several
     # of them and each one counts it once.
     columns = (
-        "play_id, season_type, epa, success, yards_gained, first_down,"
+        "play_id, season_type, success, yards_gained, first_down,"
         " down, ydstogo, yardline_100, qtr, half_seconds_remaining,"
         " score_differential, wp"
     )
@@ -414,11 +448,13 @@ def _situational_sql(relation: str, season: int) -> str:
             f"""  SELECT
     {int(season)} AS season, season_type, gsis_id, role, '{b.key}' AS bucket,
     count(*) AS plays,
-    sum(CAST(epa AS DOUBLE)) AS epa_total,
+    sum(CAST(role_epa AS DOUBLE)) AS epa_total,
     sum(CAST(success AS INTEGER)) AS successes,
     sum(CAST(yards_gained AS DOUBLE)) AS yards,
     sum(COALESCE(CAST(role_touchdown AS INTEGER), 0)) AS touchdowns,
-    sum(CAST(first_down AS INTEGER)) AS first_downs
+    sum(CAST(first_down AS INTEGER)) AS first_downs,
+    sum(CAST(role_sack AS INTEGER)) AS sacks,
+    sum(CAST(role_epa AS DOUBLE)) FILTER (WHERE role_sack = 1) AS sack_epa
   FROM r
   WHERE {b.predicate}
   GROUP BY season_type, gsis_id, role"""
@@ -518,7 +554,10 @@ TABLES: tuple[DerivedTable, ...] = (
     ),
     DerivedTable(
         name="derived_player_game_epa",
-        description="Per player, game and offensive role: plays, EPA, successes, air yards.",
+        description=(
+            "Per player, game and offensive role: plays, EPA, successes, air yards, "
+            "and the sacks inside them."
+        ),
         columns=(
             ("game_id", "VARCHAR"),
             ("season", "INTEGER"),
@@ -530,6 +569,12 @@ TABLES: tuple[DerivedTable, ...] = (
             ("epa_total", "DOUBLE"),
             ("successes", "INTEGER"),
             ("air_yards_total", "DOUBLE"),
+            # Sacks are inside `plays` and `epa_total` for the passer role, not
+            # missing from them (buckets.ROLES records the measurement). These two
+            # are what let a reader see how much of the total they are, and back
+            # them out, without a play scan.
+            ("sacks", "INTEGER"),
+            ("sack_epa", "DOUBLE"),
         ),
         build=_player_game_epa_sql,
     ),
@@ -552,6 +597,8 @@ TABLES: tuple[DerivedTable, ...] = (
             ("yards", "DOUBLE"),
             ("touchdowns", "INTEGER"),
             ("first_downs", "INTEGER"),
+            ("sacks", "INTEGER"),
+            ("sack_epa", "DOUBLE"),
         ),
         build=_situational_sql,
     ),
@@ -573,9 +620,12 @@ def table(name: str) -> DerivedTable:
 
 
 def ensure_tables(cur) -> None:
-    """Create any derived table that does not exist yet. Safe to call always."""
+    """Create any derived table that does not exist yet, and widen any that is
+    behind this module's column list. Safe to call always."""
     for derived in TABLES:
         cur.execute(derived.ddl())
+        for statement in derived.widen_sql():
+            cur.execute(statement)
 
 
 def insert_season(

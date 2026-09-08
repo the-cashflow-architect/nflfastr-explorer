@@ -6,7 +6,7 @@ whom, where, and what the scoreboard said. Nothing here reads play-by-play, and
 nothing here reads `teams_colors_logos.csv`: division membership is a property of
 the *season*, and only `alignment.py` knows it.
 
-Three rules shape the file.
+Four rules shape the file.
 
 **An unplayed game is not a 0-0 game.** `games.csv` carries the whole 2026 schedule
 and the rest of the current season with NULL scores. Every query here filters them
@@ -16,9 +16,15 @@ out, and a season with nothing played produces no rows at all rather than a tabl
 **History is read, not recomputed.** For a season whose Super Bowl has been played,
 seeds come from the bracket itself — who hosted whom in which round pins the seeding
 down almost completely, and a derivation from results cannot be wrong about history.
-The five-level tiebreaker approximation only ever runs on a season still in progress,
-and every seed it produces is flagged `projected`. Where our rules genuinely cannot
-separate two clubs we say so in `tiebreak_note` instead of picking an order.
+The same bracket usually names the division winners outright, because they are the
+top seeds, one per division; where it does, they are read too rather than derived.
+The tiebreaker approximation only ever runs on a season still in progress, or on a
+division a bracket left open, and every seed it produces is flagged `projected`.
+Where our rules genuinely cannot separate two clubs we say so in `tiebreak_note`
+instead of picking an order.
+
+**There are two tiebreaker ladders, not one.** A tie inside a division and a tie for
+a wild card are different procedures in the rulebook, and the row says which one ran.
 
 **Anything we compute carries its formula.** SRS, OSRS, DSRS, SOS, margin of victory
 and Pythagorean wins are our arithmetic, not nflverse's. `FORMULAS` is keyed by
@@ -108,11 +114,12 @@ TIEBREAK_LADDERS: dict[str, tuple[str, ...]] = {
     LADDER_WILD_CARD: WILD_CARD_TIEBREAK_RULES,
 }
 
-#: How a division title was settled. A completed bracket names its division winners
-#: outright — they are the top seeds, one per division — and where it does, no
-#: approximation of the tiebreakers should second-guess it.
-TITLE_BASIS_BRACKET = "won the division, read off the postseason bracket"
-TITLE_BASIS_LADDER = "first in the division on our tiebreaker ladder"
+#: How a division title was settled, stamped on every row of the division and not
+#: only the winner's: it is the provenance of the whole order. A completed bracket
+#: names its division winners outright — they are the top seeds, one per division —
+#: and where it does, no approximation of the tiebreakers should second-guess it.
+TITLE_BASIS_BRACKET = "division winner read off the postseason bracket"
+TITLE_BASIS_LADDER = "division winner from our tiebreaker ladder"
 
 #: Keyed by column name so `/api/coverage` and the ComputedByUs marker can look up
 #: exactly one string per number we calculate rather than read.
@@ -162,8 +169,9 @@ FORMULAS: dict[str, str] = {
         "were symmetric — most often the two first-round hosts, who never meet — the "
         "bracket cannot separate them and regular-season record does, which the row "
         "says. For a season still in progress, division winners are seeded above "
-        "wild cards and each group is ordered by the tiebreaker ladder; those rows "
-        "are flagged projected."
+        "wild cards; each division is ordered by the division tiebreakers, and the "
+        "winners and then the wild-card contenders by the conference tiebreakers. "
+        "Those rows are flagged projected."
     ),
     "point_differential": "points for - points against (regular season)",
     "longest_win_streak": "longest run of consecutive regular-season wins",
@@ -251,6 +259,9 @@ class TeamSeason:
     overall: Record = field(default_factory=Record)
     home: Record = field(default_factory=Record)
     away: Record = field(default_factory=Record)
+    #: Games at a neutral site, which belong to neither of the two splits above and
+    #: are the reason those two do not always add up to the season.
+    neutral: Record = field(default_factory=Record)
     division_record: Record = field(default_factory=Record)
     conference_record: Record = field(default_factory=Record)
     points_for: int = 0
@@ -409,15 +420,34 @@ class _Rule:
 
 
 def _head_to_head(group: Sequence[str], teams: Mapping[str, TeamSeason]) -> dict[str, float] | None:
-    # The real rule for three or more clubs is a sweep test — it applies only when
-    # one club beat or lost to all the others. We use aggregate record among the
-    # tied clubs instead, and require that every pair actually met, so the number
-    # means something. Where that is not true the rule is skipped rather than faked.
-    for a in group:
-        for b in group:
-            if a != b and teams[a].versus.get(b) is None:
-                return None
+    # The division rule is aggregate record among the tied clubs, whatever its shape.
+    # We require that every pair actually met, so the number means something; where
+    # that is not true the rule is skipped rather than faked.
+    if not _all_pairs_met(group, teams):
+        return None
     return {t: teams[t].record_versus([o for o in group if o != t]).pct for t in group}
+
+
+def _head_to_head_sweep(
+    group: Sequence[str], teams: Mapping[str, TeamSeason]
+) -> dict[str, float] | None:
+    # The conference rule is narrower than the division one: with three or more clubs
+    # it applies only when one of them beat all the others or lost to all of them.
+    # A 1-1 muddle among three clubs says nothing, and the league moves on rather
+    # than ranking on it, so we do too.
+    if not _all_pairs_met(group, teams):
+        return None
+    scores = {t: teams[t].record_versus([o for o in group if o != t]).pct for t in group}
+    if len(group) > 2 and 1.0 not in scores.values() and 0.0 not in scores.values():
+        return None
+    return scores
+
+
+def _all_pairs_met(group: Sequence[str], teams: Mapping[str, TeamSeason]) -> bool:
+    return all(
+        teams[a].versus.get(b) is not None
+        for a in group for b in group if a != b
+    )
 
 
 def _division_record(group: Sequence[str], teams: Mapping[str, TeamSeason]) -> dict[str, float] | None:
@@ -447,25 +477,64 @@ def _conference_record(group: Sequence[str], teams: Mapping[str, TeamSeason]) ->
     return {t: teams[t].conference_record.pct for t in group}
 
 
-_RULES: tuple[_Rule, ...] = (
-    _Rule(TIEBREAK_RULES[1], _head_to_head),
-    _Rule(TIEBREAK_RULES[2], _division_record),
-    _Rule(TIEBREAK_RULES[3], _common_games),
-    _Rule(TIEBREAK_RULES[4], _conference_record),
+def _strength_of_victory(
+    group: Sequence[str], teams: Mapping[str, TeamSeason]
+) -> dict[str, float] | None:
+    # The aggregate record of every club a team beat, counted once per victory: beat
+    # the same 12-5 club twice and it lands in the total twice. A club with no wins
+    # has no beaten opponents and scores 0.0, which is where it belongs.
+    scores: dict[str, float] = {}
+    for team in group:
+        beaten = Record()
+        for opponent, meetings in teams[team].versus.items():
+            for _ in range(meetings.wins):
+                beaten.merge(teams[opponent].overall)
+        scores[team] = beaten.pct
+    return scores
+
+
+_DIVISION_RULES: tuple[_Rule, ...] = (
+    _Rule(DIVISION_TIEBREAK_RULES[1], _head_to_head),
+    _Rule(DIVISION_TIEBREAK_RULES[2], _division_record),
+    _Rule(DIVISION_TIEBREAK_RULES[3], _common_games),
+    _Rule(DIVISION_TIEBREAK_RULES[4], _conference_record),
+)
+
+#: No division-record level here: the clubs in a conference tie are, by the time this
+#: ladder runs, one per division, and comparing their division records would compare
+#: two different schedules.
+_WILD_CARD_RULES: tuple[_Rule, ...] = (
+    _Rule(WILD_CARD_TIEBREAK_RULES[2], _head_to_head_sweep),
+    _Rule(WILD_CARD_TIEBREAK_RULES[3], _conference_record),
+    _Rule(WILD_CARD_TIEBREAK_RULES[4], _common_games),
+    _Rule(WILD_CARD_TIEBREAK_RULES[5], _strength_of_victory),
 )
 
 
-def rank_group(
-    codes: Sequence[str], teams: Mapping[str, TeamSeason]
-) -> list[tuple[str, str | None]]:
-    """Order clubs best-first, returning the rule that placed each one.
+@dataclass(frozen=True)
+class Placement:
+    """One club's position in an ordered group, and what put it there."""
 
-    A club that was never tied with anyone carries `None`: win percentage alone
-    put it where it is, and saying "decided by win percentage" on every row would
-    turn a meaningful note into wallpaper.
-    """
+    team: str
+    #: The rule that separated this club from the ones it was level with, or None
+    #: when win percentage alone placed it: saying "decided by win percentage" on
+    #: every row would turn a meaningful note into wallpaper.
+    note: str | None = None
+    #: Which ladder produced `note`. None exactly when `note` is.
+    ladder: str | None = None
+
+
+def rank_group(
+    codes: Sequence[str],
+    teams: Mapping[str, TeamSeason],
+    *,
+    ladder: str = LADDER_DIVISION,
+) -> list[Placement]:
+    """Order clubs best-first under one of the two ladders."""
+    if ladder == LADDER_WILD_CARD:
+        return _rank_wild_card(codes, teams)
     ordered = sorted(codes, key=lambda t: (-teams[t].pct, t))
-    out: list[tuple[str, str | None]] = []
+    out: list[Placement] = []
     i = 0
     while i < len(ordered):
         j = i
@@ -473,17 +542,75 @@ def rank_group(
             j += 1
         cluster = ordered[i : j + 1]
         if len(cluster) == 1:
-            out.append((cluster[0], None))
+            out.append(Placement(cluster[0]))
         else:
-            out.extend(_break_tie(cluster, teams))
+            out.extend(_break_tie(cluster, teams, _DIVISION_RULES, LADDER_DIVISION))
         i = j + 1
     return out
 
 
+def _rank_wild_card(
+    codes: Sequence[str], teams: Mapping[str, TeamSeason]
+) -> list[Placement]:
+    """Order clubs for the conference ladder, one slot at a time.
+
+    One at a time because of the step that starts the wild-card procedure: reduce the
+    tie to a single club per division before any conference rule is applied. A club
+    knocked out by a division rival is not eliminated from the race — it simply
+    cannot take a slot before that rival does — so the reduction has to be re-run
+    after every pick rather than once at the top.
+    """
+    remaining = list(codes)
+    out: list[Placement] = []
+    while remaining:
+        admitted = _best_in_each_division(remaining, teams)
+        best = max(teams[t].pct for t in remaining)
+        tied = sorted(t for t in remaining if teams[t].pct == best)
+        eligible = [t for t in tied if t in admitted]
+        if len(eligible) == 1:
+            placement = Placement(eligible[0])
+        else:
+            placement = _break_tie(
+                eligible, teams, _WILD_CARD_RULES, LADDER_WILD_CARD
+            )[0]
+        if len(eligible) < len(tied):
+            # The reduction knocked a club out of this pass, which is the surprising
+            # half of the answer and belongs in the note whether or not a conference
+            # rule then ran.
+            placement = Placement(
+                placement.team, _with_reduction(placement.note), LADDER_WILD_CARD
+            )
+        out.append(placement)
+        remaining.remove(placement.team)
+    return out
+
+
+def _with_reduction(note: str | None) -> str:
+    """The reduction step, and whatever conference rule ran after it."""
+    step = WILD_CARD_TIEBREAK_RULES[1]
+    if note is None:
+        return step
+    return f"{step}, then {note[0].lower()}{note[1:]}"
+
+
+def _best_in_each_division(
+    codes: Sequence[str], teams: Mapping[str, TeamSeason]
+) -> set[str]:
+    """The one club per division the wild-card ladder lets through."""
+    by_division: dict[tuple[str, str], list[str]] = {}
+    for team in codes:
+        row = teams[team]
+        by_division.setdefault((row.conference, row.division), []).append(team)
+    return {rank_group(members, teams)[0].team for members in by_division.values()}
+
+
 def _break_tie(
-    cluster: Sequence[str], teams: Mapping[str, TeamSeason]
-) -> list[tuple[str, str | None]]:
-    """Apply the ladder to clubs level on win percentage.
+    cluster: Sequence[str],
+    teams: Mapping[str, TeamSeason],
+    rules: Sequence[_Rule],
+    ladder: str,
+) -> list[Placement]:
+    """Apply one ladder to clubs level on win percentage.
 
     Each rule that separates the group restarts the ladder on the sub-groups it
     creates, which is what the real rules say to do. That terminates because a rule
@@ -491,21 +618,24 @@ def _break_tie(
     smaller than the group it came from.
     """
     if len(cluster) == 1:
-        return [(cluster[0], None)]
-    for rule in _RULES:
+        return [Placement(cluster[0])]
+    for rule in rules:
         scores = rule.score(cluster, teams)
         if scores is None or len(set(scores.values())) == 1:
             continue
-        out: list[tuple[str, str | None]] = []
+        out: list[Placement] = []
         for value in sorted(set(scores.values()), reverse=True):
             sub = sorted(t for t in cluster if scores[t] == value)
             if len(sub) == 1:
-                out.append((sub[0], rule.label))
+                out.append(Placement(sub[0], rule.label, ladder))
             else:
-                for team, note in _break_tie(sub, teams):
-                    out.append((team, note or rule.label))
+                for placement in _break_tie(sub, teams, rules, ladder):
+                    out.append(
+                        placement if placement.note
+                        else Placement(placement.team, rule.label, ladder)
+                    )
         return out
-    return [(t, UNBROKEN_NOTE) for t in sorted(cluster)]
+    return [Placement(t, UNBROKEN_NOTE, ladder) for t in sorted(cluster)]
 
 
 # --- playoff results and seeding ---------------------------------------------
@@ -622,6 +752,36 @@ def derive_seeds(
     return best, SEED_BASIS_RESULTS_AND_RECORD, unsettled
 
 
+def division_titles_in_bracket(
+    field_teams: Sequence[str],
+    postseason: Sequence[Game],
+    seeds: int,
+    divisions: int,
+) -> set[str] | None:
+    """The clubs a completed bracket proves won a division, or None where it cannot.
+
+    A conference sends one club per division to the top of its seeding, so the top
+    `divisions` seeds *are* the division winners. Where every seeding the bracket
+    allows agrees on which clubs hold those seeds, the season's division races are
+    settled and no tiebreaker approximation should be allowed to overturn them.
+
+    It does not always agree. In the six-seed, three-division era the two first-round
+    hosts were seeds 3 and 4 — one a division winner, one a wild card — and swapping
+    them explains the same games, which is exactly the 2001 NFC. Then this returns
+    None and the ladder decides, as it did before.
+    """
+    candidates = candidate_seedings(field_teams, postseason, seeds)
+    if not candidates:
+        return None
+    tops = {
+        frozenset(team for team, seed in candidate.items() if seed <= divisions)
+        for candidate in candidates
+    }
+    if len(tops) != 1:
+        return None
+    return set(next(iter(tops)))
+
+
 def _bracket_agrees(assignment: Mapping[str, int], by_round: Mapping[str, list[Game]]) -> bool:
     """Does this seeding explain who hosted whom after the wild-card round?"""
     for games_played in by_round.values():
@@ -648,42 +808,39 @@ def project_seeds(
     teams: Mapping[str, TeamSeason],
     divisions: Mapping[tuple[str, str], list[str]],
     seeds: int,
-) -> list[tuple[str, int, str | None]]:
-    """Seed one conference from the tiebreaker ladder, for a season still running.
+) -> list[Placement]:
+    """Seed one conference from the tiebreaker ladders, for a season still running.
+
+    Returned in seed order, so a club's seed is its index plus one.
 
     Division winners take the top seeds and wild cards the rest, which is the one
-    part of seeding that is not a matter of record at all. Wild cards are then picked
-    a club at a time from the best club left in each division, because the league
-    settles a division's internal order before letting two of its clubs compete for
-    the same wild-card slot — the rule the spec calls "division ties resolve before
-    wild-card ties".
+    part of seeding that is not a matter of record at all. Each division is ordered
+    by the division ladder; the winners are then ranked against each other, and the
+    clubs left over compete for the wild-card slots, both by the conference ladder.
+    Two ladders, because the league uses two.
     """
-    notes: dict[str, str | None] = {}
-    remaining: dict[tuple[str, str], list[str]] = {}
+    won_division: dict[str, Placement] = {}
     winners: list[str] = []
-    for key, members in divisions.items():
+    contenders: list[str] = []
+    for members in divisions.values():
         if not members:
             continue
         ordered = rank_group(members, teams)
-        winners.append(ordered[0][0])
-        notes[ordered[0][0]] = ordered[0][1]
-        remaining[key] = [team for team, _ in ordered[1:]]
+        won_division[ordered[0].team] = ordered[0]
+        winners.append(ordered[0].team)
+        contenders.extend(placement.team for placement in ordered[1:])
 
-    seeded: list[tuple[str, int, str | None]] = []
-    for team, note in rank_group(winners, teams):
-        seeded.append((team, len(seeded) + 1, note or notes.get(team)))
-
-    while len(seeded) < seeds:
-        pool = [members[0] for members in remaining.values() if members]
-        if not pool:
-            break
-        team, note = rank_group(pool, teams)[0]
-        seeded.append((team, len(seeded) + 1, note))
-        for key, members in remaining.items():
-            if members and members[0] == team:
-                remaining[key] = members[1:]
-                break
-    return seeded
+    # A division winner whose seed needed nothing to settle still has a story worth
+    # telling if winning the division itself did.
+    seeded = [
+        placement if placement.note else won_division[placement.team]
+        for placement in rank_group(winners, teams, ladder=LADDER_WILD_CARD)
+    ]
+    if len(seeded) < seeds:
+        seeded.extend(
+            rank_group(contenders, teams, ladder=LADDER_WILD_CARD)[: seeds - len(seeded)]
+        )
+    return seeded[:seeds]
 
 
 # --- the build ---------------------------------------------------------------
@@ -788,7 +945,11 @@ def _season(
             )
             # A neutral-site game belongs to neither split. The schedule still names
             # a home club, but calling Wembley a home game would make the split lie.
-            if not game.neutral:
+            # It is counted rather than dropped, so a home 4-4 and an away 4-4 in a
+            # seventeen-game season have a stated reason for not adding up.
+            if game.neutral:
+                row.neutral.add(scored, allowed)
+            else:
                 (row.home if at_home else row.away).add(scored, allowed)
             if row.conference == other.conference:
                 row.conference_record.add(scored, allowed)
@@ -810,20 +971,48 @@ def _season(
     for code, row in teams.items():
         divisions.setdefault((row.conference, row.division), []).append(code)
 
-    division_rank: dict[str, int] = {}
-    division_note: dict[str, str | None] = {}
-    for members in divisions.values():
-        for position, (code, note) in enumerate(rank_group(members, teams), start=1):
-            division_rank[code] = position
-            division_note[code] = note
-
-    winners = {code for code, rank in division_rank.items() if rank == 1}
     completed = any(g.game_type == "SB" for g in postseason)
-    seeding = _seed_season(season, teams, divisions, postseason, winners, completed)
+    # The ladder's answer, needed before the bracket is read because it is what
+    # orders the candidate seedings the bracket allows. Where the bracket then names
+    # the winners outright, this is discarded in favour of what actually happened.
+    ladder_winners = {
+        rank_group(members, teams)[0].team for members in divisions.values() if members
+    }
+    seeding = _seed_season(
+        season, teams, divisions, postseason, ladder_winners, completed
+    )
+
+    division_rank: dict[str, int] = {}
+    division_placement: dict[str, Placement] = {}
+    title_basis: dict[str, str] = {}
+    winners: set[str] = set()
+    for (conference, division), members in divisions.items():
+        champion = None
+        if conference in seeding.settled_conferences:
+            proven = [code for code in members if code in seeding.division_winners]
+            # Exactly one club per division holds a top seed. Anything else means the
+            # bracket and the alignment table disagree about what season this is, and
+            # the ladder — which at least reads one consistent set of divisions —
+            # decides rather than a half-read bracket.
+            if len(proven) == 1:
+                champion = proven[0]
+        if champion is None:
+            placements = rank_group(members, teams)
+            basis = TITLE_BASIS_LADDER
+        else:
+            placements = [Placement(champion)] + rank_group(
+                [code for code in members if code != champion], teams
+            )
+            basis = TITLE_BASIS_BRACKET
+        winners.add(placements[0].team)
+        for position, placement in enumerate(placements, start=1):
+            division_rank[placement.team] = position
+            division_placement[placement.team] = placement
+            title_basis[placement.team] = basis
 
     rows: list[dict] = []
     for code, row in sorted(teams.items()):
-        seed, basis, seed_note, projected = seeding.get(code, (None, None, None, False))
+        seed = seeding.seeds.get(code)
         if row.postseason:
             round_code, result, post_wins, post_losses = _playoff_result(code, row.postseason)
         else:
@@ -831,7 +1020,11 @@ def _season(
             round_code = result = None
             post_wins = post_losses = 0
         kind, length, longest = _streak(row.results)
-        note = seed_note or division_note.get(code)
+        placement = division_placement[code]
+        if seed is not None and seed.note:
+            note, ladder = seed.note, seed.ladder
+        else:
+            note, ladder = placement.note, placement.ladder
         rows.append(
             {
                 "season": season,
@@ -851,6 +1044,9 @@ def _season(
                 "away_wins": row.away.wins,
                 "away_losses": row.away.losses,
                 "away_ties": row.away.ties,
+                "neutral_wins": row.neutral.wins,
+                "neutral_losses": row.neutral.losses,
+                "neutral_ties": row.neutral.ties,
                 "division_wins": row.division_record.wins,
                 "division_losses": row.division_record.losses,
                 "division_ties": row.division_record.ties,
@@ -862,10 +1058,12 @@ def _season(
                 "longest_win_streak": longest,
                 "division_rank": division_rank[code],
                 "won_division": code in winners,
-                "playoff_seed": seed,
-                "seed_basis": basis,
-                "projected": projected,
+                "division_title_basis": title_basis[code],
+                "playoff_seed": None if seed is None else seed.seed,
+                "seed_basis": None if seed is None else seed.basis,
+                "projected": False if seed is None else seed.projected,
                 "tiebreak_note": note,
+                "tiebreak_ladder": ladder,
                 "made_playoffs": bool(row.postseason),
                 "playoff_round": round_code,
                 "playoff_result": result,
@@ -885,17 +1083,45 @@ def _season(
     return rows, ratings
 
 
+@dataclass(frozen=True)
+class Seed:
+    """One club's playoff seed and the provenance of it."""
+
+    seed: int
+    basis: str
+    note: str | None
+    #: Which tiebreaker ladder produced `note`, or None when the bracket did.
+    ladder: str | None
+    projected: bool
+
+
+@dataclass(frozen=True)
+class SeasonSeeding:
+    seeds: dict[str, Seed]
+    #: Clubs a completed bracket proves won a division: the top seeds, one per
+    #: division, in the conferences where the bracket settles them.
+    division_winners: frozenset[str]
+    settled_conferences: frozenset[str]
+
+
 def _seed_season(
     season: int,
     teams: Mapping[str, TeamSeason],
     divisions: Mapping[tuple[str, str], list[str]],
     postseason: Sequence[Game],
-    winners: set[str],
+    ladder_winners: set[str],
     completed: bool,
-) -> dict[str, tuple[int | None, str | None, str | None, bool]]:
-    """team -> (seed, basis, note, projected) for both conferences."""
+) -> SeasonSeeding:
+    """Both conferences seeded, and whatever the bracket settled along the way.
+
+    `ladder_winners` is the tiebreaker ladder's guess at the division winners. It
+    only ever chooses between seedings the bracket already allows; the bracket, not
+    the guess, decides who won a division.
+    """
     seeds = alignment.playoff_seeds(season)
-    out: dict[str, tuple[int | None, str | None, str | None, bool]] = {}
+    out: dict[str, Seed] = {}
+    champions: set[str] = set()
+    settled: set[str] = set()
     for conference in sorted({row.conference for row in teams.values()}):
         members = [code for code, row in teams.items() if row.conference == conference]
         conference_divisions = {
@@ -911,7 +1137,7 @@ def _seed_season(
                 field_teams,
                 bracket,
                 seeds,
-                order_key=lambda t: _record_order_key(t, teams, winners),
+                order_key=lambda t: _record_order_key(t, teams, ladder_winners),
             )
             if derived is None:
                 # We know who played, not what they were seeded. Saying nothing is
@@ -926,11 +1152,21 @@ def _seed_season(
                     if code in unsettled
                     else None
                 )
-                out[code] = (seed, basis, note, False)
+                out[code] = Seed(seed, basis, note, None, False)
+            titles = division_titles_in_bracket(
+                field_teams, bracket, seeds, len(conference_divisions)
+            )
+            if titles is not None:
+                champions |= titles
+                settled.add(conference)
         else:
-            for code, seed, note in project_seeds(teams, conference_divisions, seeds):
-                out[code] = (seed, SEED_BASIS_PROJECTED, note, True)
-    return out
+            for position, placement in enumerate(
+                project_seeds(teams, conference_divisions, seeds), start=1
+            ):
+                out[placement.team] = Seed(
+                    position, SEED_BASIS_PROJECTED, placement.note, placement.ladder, True
+                )
+    return SeasonSeeding(out, frozenset(champions), frozenset(settled))
 
 
 _COLUMNS: tuple[tuple[str, str], ...] = (
@@ -940,13 +1176,17 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("points_against", "INTEGER"), ("point_differential", "INTEGER"),
     ("home_wins", "INTEGER"), ("home_losses", "INTEGER"), ("home_ties", "INTEGER"),
     ("away_wins", "INTEGER"), ("away_losses", "INTEGER"), ("away_ties", "INTEGER"),
+    ("neutral_wins", "INTEGER"), ("neutral_losses", "INTEGER"),
+    ("neutral_ties", "INTEGER"),
     ("division_wins", "INTEGER"), ("division_losses", "INTEGER"),
     ("division_ties", "INTEGER"), ("conference_wins", "INTEGER"),
     ("conference_losses", "INTEGER"), ("conference_ties", "INTEGER"),
     ("streak_kind", "VARCHAR"), ("streak_length", "INTEGER"),
     ("longest_win_streak", "INTEGER"), ("division_rank", "INTEGER"),
-    ("won_division", "BOOLEAN"), ("playoff_seed", "INTEGER"),
+    ("won_division", "BOOLEAN"), ("division_title_basis", "VARCHAR"),
+    ("playoff_seed", "INTEGER"),
     ("seed_basis", "VARCHAR"), ("projected", "BOOLEAN"), ("tiebreak_note", "VARCHAR"),
+    ("tiebreak_ladder", "VARCHAR"),
     ("made_playoffs", "BOOLEAN"), ("playoff_round", "VARCHAR"),
     ("playoff_result", "VARCHAR"), ("playoff_wins", "INTEGER"),
     ("playoff_losses", "INTEGER"), ("srs", "DOUBLE"), ("osrs", "DOUBLE"),

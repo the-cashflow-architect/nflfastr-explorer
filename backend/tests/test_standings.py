@@ -36,6 +36,15 @@ def _game(game_id, season, game_type, week, home, away, home_score, away_score,
     )
 
 
+def _db_row(game):
+    """One `Game` in the column order the real games table uses."""
+    return (
+        game.game_id, game.season, game.game_type, game.week,
+        game.home, game.home_score, game.away, game.away_score,
+        "Neutral" if game.neutral else "Home",
+    )
+
+
 def _replace_games(loader, rows):
     """Put a synthetic schedule in the games table the loader already built.
 
@@ -307,14 +316,14 @@ def test_the_build_is_deterministic(built_loader):
     assert first == second
 
 
-def test_splits_streaks_and_neutral_sites_from_a_hand_built_season():
+def _neutral_site_season():
     """A six-club 2024 with one tie, one neutral site and two conferences.
 
     Kansas City goes W, W, L, W, T: a one-game tie streak on top of a two-game win
     streak, three division games, one non-conference game, and a neutral-site win
     that belongs to neither the home nor the away split.
     """
-    games = [
+    return [
         _game("g1", 2024, "REG", 1, "KC", "DEN", 24, 10),
         _game("g2", 2024, "REG", 2, "LV", "KC", 20, 30),
         _game("g3", 2024, "REG", 3, "KC", "DAL", 14, 21),
@@ -322,15 +331,30 @@ def test_splits_streaks_and_neutral_sites_from_a_hand_built_season():
         _game("g5", 2024, "REG", 5, "KC", "LAC", 3, 3),
         _game("g6", 2024, "REG", 6, "LV", "DEN", 24, 21),
     ]
+
+
+def test_splits_streaks_and_neutral_sites_from_a_hand_built_season():
+    games = _neutral_site_season()
     rows = {row["team"]: row for row in etl.season_rows(2024, games)}
     kc = rows["KC"]
     assert (kc["wins"], kc["losses"], kc["ties"]) == (3, 1, 1)
     assert (kc["points_for"], kc["points_against"]) == (91, 71)
     assert kc["streak_kind"] == "T" and kc["streak_length"] == 1
     assert kc["longest_win_streak"] == 2
-    # The neutral-site win is in neither split, so the two do not add up to five.
+    # The neutral-site win is in neither split, so the two do not add up to five —
+    # and the missing game is counted rather than lost, so the row says why.
     assert (kc["home_wins"], kc["home_losses"], kc["home_ties"]) == (1, 1, 1)
     assert (kc["away_wins"], kc["away_losses"], kc["away_ties"]) == (1, 0, 0)
+    assert (kc["neutral_wins"], kc["neutral_losses"], kc["neutral_ties"]) == (1, 0, 0)
+    assert sum(
+        kc[f"{split}_{outcome}"]
+        for split in ("home", "away", "neutral")
+        for outcome in ("wins", "losses", "ties")
+    ) == kc["games"]
+    # Philadelphia hosted on paper and lost at a neutral site; neither is a home loss.
+    phi = rows["PHI"]
+    assert (phi["home_wins"], phi["home_losses"], phi["home_ties"]) == (0, 0, 0)
+    assert (phi["neutral_wins"], phi["neutral_losses"], phi["neutral_ties"]) == (0, 1, 0)
     assert (kc["division_wins"], kc["division_losses"], kc["division_ties"]) == (2, 0, 1)
     # Dallas and Philadelphia are NFC, so neither counts towards a conference record.
     assert (kc["conference_wins"], kc["conference_losses"], kc["conference_ties"]) == \
@@ -479,6 +503,207 @@ def test_a_partial_bracket_is_not_a_seeding():
     assert etl.candidate_seedings(["KC", "BUF"], games, 7) == []
 
 
+# --- division titles the bracket already settled -----------------------------
+
+
+def test_the_2015_afc_bracket_names_its_four_division_winners():
+    """Denver, New England, Cincinnati and Houston, from the bracket alone.
+
+    Those are the four clubs that actually won the 2015 AFC divisions — West, East,
+    North and South — and the four top seeds are exactly them. Kansas City and
+    Pittsburgh, the wild cards, are not among them however well they played.
+    """
+    games = [
+        _game("2015_18_KC_HOU", 2015, "WC", 18, "HOU", "KC", 0, 30),
+        _game("2015_18_PIT_CIN", 2015, "WC", 18, "CIN", "PIT", 16, 18),
+        _game("2015_19_PIT_DEN", 2015, "DIV", 19, "DEN", "PIT", 23, 16),
+        _game("2015_19_KC_NE", 2015, "DIV", 19, "NE", "KC", 27, 20),
+        _game("2015_20_NE_DEN", 2015, "CON", 20, "DEN", "NE", 20, 18),
+    ]
+    field_teams = sorted({g_.home for g_ in games} | {g_.away for g_ in games})
+    assert etl.division_titles_in_bracket(field_teams, games, 6, 4) == {
+        "DEN", "NE", "CIN", "HOU"
+    }
+
+
+def test_the_2004_afc_bracket_names_the_winners_it_cannot_order():
+    """It cannot say whether Indianapolis or San Diego was the third seed.
+
+    It can still say both won divisions — the two of them are seeds 3 and 4 either
+    way, and in a four-division, six-seed conference the top four seeds are the
+    division winners. A club being unseparable from another is not a reason to
+    withhold a fact both orderings agree on.
+    """
+    games = [
+        _game("2004_18_NYJ_SD", 2004, "WC", 18, "LAC", "NYJ", 17, 20),
+        _game("2004_18_DEN_IND", 2004, "WC", 18, "IND", "DEN", 49, 24),
+        _game("2004_19_NYJ_PIT", 2004, "DIV", 19, "PIT", "NYJ", 20, 17),
+        _game("2004_19_IND_NE", 2004, "DIV", 19, "NE", "IND", 20, 3),
+        _game("2004_20_NE_PIT", 2004, "CON", 20, "PIT", "NE", 27, 41),
+    ]
+    field_teams = sorted({g_.home for g_ in games} | {g_.away for g_ in games})
+    assert etl.division_titles_in_bracket(field_teams, games, 6, 4) == {
+        "PIT", "NE", "IND", "LAC"
+    }
+
+
+def test_the_2001_nfc_bracket_cannot_name_its_division_winners():
+    """Three divisions and six seeds put a division winner on the same line as a
+    wild card: Philadelphia was seed 3 and Green Bay seed 4, and the bracket allows
+    the reverse. So this returns nothing and the ladder is left to decide.
+    """
+    games = [
+        _game("2001_18_TB_PHI", 2001, "WC", 18, "PHI", "TB", 31, 9),
+        _game("2001_18_SF_GB", 2001, "WC", 18, "GB", "SF", 25, 15),
+        _game("2001_19_GB_STL", 2001, "DIV", 19, "LA", "GB", 45, 17),
+        _game("2001_19_PHI_CHI", 2001, "DIV", 19, "CHI", "PHI", 19, 33),
+        _game("2001_20_PHI_STL", 2001, "CON", 20, "LA", "PHI", 29, 24),
+    ]
+    field_teams = sorted({g_.home for g_ in games} | {g_.away for g_ in games})
+    assert etl.division_titles_in_bracket(field_teams, games, 6, 3) is None
+
+
+def _split_division_season(*, postseason: bool):
+    """A 2024 AFC where Baltimore and Cincinnati are identical on every rule we have.
+
+    They split their two meetings, so head-to-head is level; they are the only two
+    clubs of their division here, so their division records are level; every game in
+    the season is a conference game, so their conference records are level; and they
+    beat and lost to the same four other clubs, so their common-games records are
+    level too. Our ladder runs out and falls back to alphabetical order, which puts
+    Baltimore first.
+
+    The bracket says otherwise: Cincinnati is the second seed and Baltimore the
+    fifth, so Cincinnati won the division and Baltimore was a wild card. The bracket
+    is what happened.
+    """
+    games = [
+        _game("2024_01_CIN_BAL", 2024, "REG", 1, "BAL", "CIN", 24, 20),
+        _game("2024_02_BAL_CIN", 2024, "REG", 2, "CIN", "BAL", 27, 17),
+        _game("2024_03_MIA_BAL", 2024, "REG", 3, "BAL", "MIA", 30, 13),
+        _game("2024_04_MIA_CIN", 2024, "REG", 4, "CIN", "MIA", 26, 10),
+        _game("2024_05_BAL_BUF", 2024, "REG", 5, "BUF", "BAL", 28, 21),
+        _game("2024_06_CIN_BUF", 2024, "REG", 6, "BUF", "CIN", 24, 14),
+        _game("2024_07_IND_BAL", 2024, "REG", 7, "BAL", "IND", 20, 16),
+        _game("2024_08_IND_CIN", 2024, "REG", 8, "CIN", "IND", 23, 17),
+        _game("2024_09_BAL_KC", 2024, "REG", 9, "KC", "BAL", 31, 24),
+        _game("2024_10_CIN_KC", 2024, "REG", 10, "KC", "CIN", 27, 20),
+        _game("2024_11_MIA_BUF", 2024, "REG", 11, "BUF", "MIA", 31, 10),
+        _game("2024_12_BUF_MIA", 2024, "REG", 12, "MIA", "BUF", 13, 31),
+        _game("2024_13_IND_HOU", 2024, "REG", 13, "HOU", "IND", 24, 10),
+        _game("2024_14_HOU_IND", 2024, "REG", 14, "IND", "HOU", 17, 27),
+        _game("2024_15_LV_KC", 2024, "REG", 15, "KC", "LV", 30, 13),
+        _game("2024_16_KC_LV", 2024, "REG", 16, "LV", "KC", 14, 24),
+        _game("2024_17_LV_MIA", 2024, "REG", 17, "MIA", "LV", 27, 20),
+        _game("2024_18_LV_IND", 2024, "REG", 18, "IND", "LV", 23, 20),
+    ]
+    if postseason:
+        games += [
+            # Seeds 1 KC, 2 CIN, 3 BUF, 4 HOU, 5 BAL, 6 MIA, 7 IND.
+            _game("2024_19_IND_CIN", 2024, "WC", 19, "CIN", "IND", 27, 10),
+            _game("2024_19_MIA_BUF", 2024, "WC", 19, "BUF", "MIA", 30, 20),
+            _game("2024_19_BAL_HOU", 2024, "WC", 19, "HOU", "BAL", 23, 20),
+            _game("2024_20_HOU_KC", 2024, "DIV", 20, "KC", "HOU", 26, 13),
+            _game("2024_20_BUF_CIN", 2024, "DIV", 20, "CIN", "BUF", 24, 21),
+            _game("2024_21_CIN_KC", 2024, "CON", 21, "KC", "CIN", 20, 17),
+            _game("2024_22_PHI_KC", 2024, "SB", 22, "KC", "PHI", 31, 24, neutral=True),
+        ]
+    return games
+
+
+def test_a_completed_bracket_overrules_the_ladder_on_the_division_title():
+    rows = {row["team"]: row for row in
+            etl.season_rows(2024, _split_division_season(postseason=True))}
+    assert rows["BAL"]["wins"] == rows["CIN"]["wins"] == 3
+    assert rows["CIN"]["won_division"] is True
+    assert rows["CIN"]["division_rank"] == 1
+    assert rows["CIN"]["division_title_basis"] == etl.TITLE_BASIS_BRACKET
+    assert rows["BAL"]["won_division"] is False
+    assert rows["BAL"]["division_rank"] == 2
+    # No tiebreaker ran, so no tiebreaker is claimed. The old code stamped the
+    # "our rules ran out" marker on both clubs and made Baltimore the champion.
+    assert rows["BAL"]["tiebreak_note"] is None
+    assert rows["BAL"]["tiebreak_ladder"] is None
+    assert rows["CIN"]["playoff_seed"] == 2 and rows["BAL"]["playoff_seed"] == 5
+    assert rows["CIN"]["seed_basis"] == etl.SEED_BASIS_RESULTS
+    # One title per division, still.
+    assert sum(1 for row in rows.values() if row["won_division"]) == 4
+
+
+def test_without_a_bracket_the_ladder_decides_and_says_it_could_not():
+    """The same season with the postseason not yet played."""
+    rows = {row["team"]: row for row in
+            etl.season_rows(2024, _split_division_season(postseason=False))}
+    assert rows["BAL"]["won_division"] is True
+    assert rows["BAL"]["division_title_basis"] == etl.TITLE_BASIS_LADDER
+    assert rows["BAL"]["tiebreak_note"] == etl.UNBROKEN_NOTE
+    assert rows["BAL"]["tiebreak_ladder"] == etl.LADDER_DIVISION
+    assert rows["CIN"]["won_division"] is False
+    assert all(row["projected"] for row in rows.values() if row["playoff_seed"])
+
+
+def test_two_unbeaten_division_winners_are_separated_by_strength_of_victory():
+    """Buffalo and Kansas City are both 4-0 in the same season as above.
+
+    They never met, every game either played was a conference game so their
+    conference records are level too, and they share no common opponents. The
+    division ladder has nothing left to say at that point; the conference ladder
+    still does, and what it says is strength of victory — which Buffalo wins,
+    because the clubs it beat won more than the clubs Kansas City beat.
+    """
+    rows = {row["team"]: row for row in
+            etl.season_rows(2024, _split_division_season(postseason=False))}
+    assert (rows["BUF"]["playoff_seed"], rows["KC"]["playoff_seed"]) == (1, 2)
+    for code in ("BUF", "KC"):
+        assert rows[code]["tiebreak_note"] == "Strength of victory"
+        assert rows[code]["tiebreak_ladder"] == etl.LADDER_WILD_CARD
+    # Which is a rule the division ladder does not have, and must not acquire.
+    assert "Strength of victory" not in etl.DIVISION_TIEBREAK_RULES
+
+
+def _standing(code, *, season=2024, record, conference_record=None, versus=None,
+              division_record=None):
+    """One club's season as the tiebreakers see it, without a schedule behind it."""
+    conference, division = alignment.division_of(code, season)
+    row = etl.TeamSeason(season=season, team=code, conference=conference,
+                         division=division)
+    row.overall = etl.Record(*record)
+    row.conference_record = etl.Record(*(conference_record or record))
+    row.division_record = etl.Record(*(division_record or (0, 0, 0)))
+    row.versus = {opponent: etl.Record(*rec) for opponent, rec in (versus or {}).items()}
+    return row
+
+
+def test_the_wild_card_ladder_admits_one_club_per_division_before_anything_else():
+    """Cincinnati has the best conference record of the three and still finishes last.
+
+    All three are 4-4. A straight conference tiebreak would put Cincinnati first,
+    but Baltimore swept it, so the division ladder places Baltimore above it and the
+    wild-card procedure begins by admitting only the highest-placed club in each
+    division. Houston takes the first slot from the two clubs actually eligible.
+    """
+    teams = {
+        "BAL": _standing("BAL", record=(4, 4, 0), conference_record=(2, 4, 0),
+                         versus={"CIN": (2, 0, 0)}, division_record=(2, 0, 0)),
+        "CIN": _standing("CIN", record=(4, 4, 0), conference_record=(4, 2, 0),
+                         versus={"BAL": (0, 2, 0)}, division_record=(0, 2, 0)),
+        "HOU": _standing("HOU", record=(4, 4, 0), conference_record=(3, 3, 0)),
+    }
+    order = etl.rank_group(sorted(teams), teams, ladder=etl.LADDER_WILD_CARD)
+    assert [placement.team for placement in order] == ["HOU", "BAL", "CIN"]
+    # Both facts, in order: who was eligible, and what then separated them.
+    assert order[0].note == (
+        "Only the highest-placed club in each division is eligible, then "
+        "conference record"
+    )
+    assert order[1].note == "Only the highest-placed club in each division is eligible"
+    assert all(placement.ladder == etl.LADDER_WILD_CARD for placement in order[:2])
+    # The division ladder, which has no such step, would have ordered them by that
+    # conference record and let Cincinnati past its own division rival.
+    straight = etl.rank_group(sorted(teams), teams)
+    assert [placement.team for placement in straight][0] == "CIN"
+
+
 # --- a whole league ----------------------------------------------------------
 
 
@@ -570,7 +795,13 @@ def test_season_standings_groups_three_ways(built_loader):
     assert [group["label"] for group in by_conference["groups"]] == ["AFC", "NFC"]
     assert len(league["groups"]) == 1
     assert {group["conference"] for group in by_division["groups"]} == {"AFC", "NFC"}
-    assert by_division["tiebreak_rules_implemented"][0] == "Win percentage"
+    ladders = by_division["tiebreak_rules_implemented"]
+    assert ladders["division"][0] == ladders["wild_card"][0] == "Win percentage"
+    # The two ladders diverge immediately after that, which is the point of having
+    # two of them: a division tie asks about the division, a wild-card tie does not.
+    assert ladders["division"] != ladders["wild_card"]
+    assert "Strength of victory" in ladders["wild_card"]
+    assert "Strength of victory" not in ladders["division"]
     with pytest.raises(ValueError):
         repo.season_standings(2024, grouping="alphabetical", loader=built_loader)
 
@@ -587,6 +818,37 @@ def test_read_side_computes_rates_rather_than_reading_them(built_loader):
     assert row["home"].count("-") == 2
     assert row["ranks"]["srs"] >= 1
     assert "srs" in row["formulas"]
+
+
+def test_the_read_side_says_why_home_and_away_do_not_add_up(built_loader):
+    _built(built_loader, [_db_row(game) for game in _neutral_site_season()])
+    row = repo.team_season_record("KC", 2024, loader=built_loader)
+    assert row["neutral"] == "1-0-0"
+    assert row["neutral_games"] == 1
+    assert row["home"] == "1-1-1" and row["away"] == "1-0-0"
+    assert "neutral site" in row["neutral_note"]
+    # A club that played no neutral-site game says nothing, rather than "0-0-0 at a
+    # neutral site", which would be a note about nothing on 31 rows out of 32.
+    assert repo.team_season_record("LAC", 2024, loader=built_loader)["neutral_note"] is None
+    payload = repo.season_standings(2024, loader=built_loader)
+    # One game, not two, however many rows it appears on.
+    assert "1 game was played at a neutral site" in payload["note"]
+
+
+def test_the_read_side_names_the_ladder_that_produced_each_note(built_loader):
+    rows = [_db_row(game) for game in _split_division_season(postseason=False)]
+    _built(built_loader, rows)
+    baltimore = repo.team_season_record("BAL", 2024, loader=built_loader)
+    buffalo = repo.team_season_record("BUF", 2024, loader=built_loader)
+    assert baltimore["tiebreak_ladder"] == "division"
+    assert baltimore["tiebreak_rules_applied"] == list(etl.DIVISION_TIEBREAK_RULES)
+    assert buffalo["tiebreak_ladder"] == "wild card"
+    assert buffalo["tiebreak_rules_applied"] == list(etl.WILD_CARD_TIEBREAK_RULES)
+    # Nothing separated Houston from anybody, so it claims no rule and no ladder.
+    houston = repo.team_season_record("HOU", 2024, loader=built_loader)
+    assert houston["tiebreak_note"] is None
+    assert houston["tiebreak_ladder"] is None
+    assert houston["tiebreak_rules_applied"] is None
 
 
 def test_a_historical_code_and_the_current_one_are_the_same_franchise(built_loader):

@@ -27,6 +27,21 @@ The build fails loudly on any team-season with no alignment row.
 Franchise moves inside the window (alias → current): `STL`→`LA`, `SD`→`LAC`,
 `OAK`→`LV`. `LAR` and `LA` both appear in source files and must normalise to `LA`.
 
+### 0.1b `game_id` embeds period codes — never parse a team out of it
+
+`game_id` is `{season}_{week}_{away}_{home}` using the codes the teams played under
+at the time: `1999_05_SF_STL`. The same row's `home_team` reads `LA`, because the
+column is canonicalised and the id is not.
+
+Both `games.csv` and play-by-play build the id the same way, so **game ids join
+across every source with zero mismatches** (measured: 0 of 248 pbp game ids for 1999
+fail to match `games.csv`). The id is a good key.
+
+It is not a source of team identity. A page that splits a game id to find who played
+gets `STL`, which has no franchise page, and produces a dead link on exactly the
+seasons a reference site is most likely to be checked on. Read `home_team` and
+`away_team`.
+
 ### 0.2 Charting eras — measured null counts in play_by_play
 
 | Field | 1999 | 2005 | 2006 | 2024 |

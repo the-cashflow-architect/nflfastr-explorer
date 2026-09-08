@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from app.etl import pbp_derive
-from app.etl.buckets import BUCKETS, BUCKET_KEYS, ROLE_KEYS, any_bucket_sql
+from app.etl.buckets import BUCKETS, BUCKET_KEYS, ROLE_KEYS, any_bucket_sql, role
 from app.etl.pbp_derive import (
     WP_POINTS_PER_GAME,
     derive_all,
@@ -470,3 +470,173 @@ def test_situational_counts_match_the_plays_they_came_from(derived):
             f"AND passer_player_id IS NOT NULL AND ({bucket.predicate})"
         ).fetchone()[0]
         assert derived_plays == raw, bucket.key
+
+
+# --- the passer role: sacks, scrambles and which EPA ------------------------
+
+
+def test_the_passer_role_is_charged_qb_epa_and_the_others_the_plays_own_epa():
+    """`qb_epa` is not a way of hiding a sack; it is a fumble convention.
+
+    Measured on the published files: `epa` and `qb_epa` are identical on every
+    play carrying `passer_player_id` except a lost fumble — 62 such plays in 2024
+    worth +293.6 EPA, 64 in 1999 worth +288.5 — where `epa` charges the passer for
+    a receiver coughing the ball up after the catch and `qb_epa` stops at the
+    catch. On all 1,392 sacks in 2024 the two agree to the last decimal.
+    """
+    assert role("passer").epa_column == "qb_epa"
+    assert role("rusher").epa_column == "epa"
+    assert role("receiver").epa_column == "epa"
+
+
+def test_a_sack_is_a_passer_play_and_its_epa_is_counted_and_labelled(built_loader):
+    """A quarterback's EPA per dropback must include the plays that hurt him most.
+
+    `passer_player_id` is populated on every sack in the real files — 1,297 in
+    1999, 1,234 in 2005, 1,202 in 2006, 1,250 in 2015 and 1,392 in 2024, none of
+    them NULL — so the sack is already inside `plays` and `epa_total`. What was
+    missing was any way to see that from the table, which is what `sacks` and
+    `sack_epa` are for: drop the sack from the frame and this test fails on the
+    counts, drop the two columns and it fails on the labelling.
+    """
+    built_loader.ensure("pbp")
+    cur = built_loader.cursor()
+    ensure_tables(cur)
+    _plays_table(
+        cur,
+        "sack_plays",
+        """
+        SELECT * FROM (VALUES
+          -- A completion: epa and qb_epa agree.
+          (1998, 1, 'K1', 1, 'KC', '00-0000001', '00-0000002', 0, -1.0, -1.0),
+          -- A completion the receiver fumbles away: the passer keeps his credit
+          -- up to the catch, the receiver wears the whole play.
+          (1998, 1, 'K1', 2, 'KC', '00-0000001', '00-0000002', 0, -4.0,  1.0),
+          -- A sack: no receiver, no rusher, and the passer eats all of it.
+          (1998, 1, 'K1', 3, 'KC', '00-0000001', NULL,         1, -6.0, -6.0)
+        ) AS t(season, week, game_id, play_id, posteam, passer_player_id,
+               receiver_player_id, sack, epa, qb_epa)
+        """,
+    )
+    insert_season(
+        cur, "sack_plays", 1998, tables=[pbp_derive.table("derived_player_game_epa")]
+    )
+    rows = {
+        r[0]: r[1:]
+        for r in cur.execute(
+            "SELECT role, plays, epa_total, sacks, sack_epa "
+            "FROM derived_player_game_epa WHERE game_id = 'K1'"
+        ).fetchall()
+    }
+
+    plays, epa_total, sacks, sack_epa = rows["passer"]
+    assert plays == 3, "the sack is one of the passer's plays, not a play he skipped"
+    assert epa_total == pytest.approx(-6.0), (
+        "qb_epa: -1.0 + 1.0 - 6.0. Summing the play's own epa would give -11.0 and "
+        "charge the quarterback for his receiver's fumble"
+    )
+    assert (sacks, sack_epa) == (1, pytest.approx(-6.0)), (
+        "the sack share of that total has to be readable without a play scan"
+    )
+    assert epa_total - sack_epa == pytest.approx(0.0), "EPA net of sacks is a subtraction"
+
+    receiver_plays, receiver_epa, receiver_sacks, receiver_sack_epa = rows["receiver"]
+    assert receiver_plays == 2
+    assert receiver_epa == pytest.approx(-5.0), "the receiver wears the play's own EPA"
+    assert receiver_sacks == 0
+    assert receiver_sack_epa is None, "no sacks means no sack EPA, not zero EPA"
+
+
+@pytest.mark.parametrize("season", FIXTURE_SEASONS)
+def test_the_situational_sack_counts_are_the_sacks_the_plays_hold(derived, season):
+    """Every sack in the season reaches the passer's row, in every bucket it fits."""
+    cur = derived.cursor()
+    relation = derived.pbp_relation(season)
+    for bucket in BUCKETS:
+        stored = cur.execute(
+            "SELECT COALESCE(sum(sacks), 0) FROM derived_player_season_situational "
+            "WHERE season = ? AND role = 'passer' AND bucket = ?",
+            [season, bucket.key],
+        ).fetchone()[0]
+        raw = cur.execute(
+            f"SELECT count(*) FROM {relation} AS p WHERE season = {season} "
+            f"AND passer_player_id IS NOT NULL AND sack = 1 AND ({bucket.predicate})"
+        ).fetchone()[0]
+        assert stored == raw, bucket.key
+    total = cur.execute(
+        f"SELECT count(*) FROM {relation} AS p WHERE season = {season} AND sack = 1"
+    ).fetchone()[0]
+    assert total > 0, "a fixture with no sack cannot test that sacks are counted"
+
+
+# --- the fixture reaches every bucket ----------------------------------------
+
+
+@pytest.mark.parametrize("season", FIXTURE_SEASONS)
+def test_the_fixture_seasons_populate_all_sixteen_buckets(derived, season):
+    """`red_zone`, `goal_to_go` and `garbage_time` used to match no fixture row.
+
+    The generator stopped `yardline_100` at 33 and kept win probability inside
+    0.30-0.69, so three predicates could have been broken upstream — a renamed
+    column, a flipped bound — and every test here would still have passed.
+    """
+    cur = derived.cursor()
+    found = {
+        row[0]
+        for row in cur.execute(
+            "SELECT DISTINCT bucket FROM derived_player_season_situational "
+            "WHERE season = ?",
+            [season],
+        ).fetchall()
+    }
+    assert found == set(BUCKET_KEYS)
+
+
+def test_the_fixture_game_is_eight_whole_drives_and_both_clubs_have_the_ball(derived):
+    """DuckDB's `/` is float division and `::INTEGER` rounds.
+
+    `(i / 6)::INTEGER` first steps at i = 3, so the 48-play fixture game used to
+    cut into nine ragged drives whose `drive_play_count` of 6 was a fiction — and
+    because possession alternated per snap rather than per drive, every drive's
+    first play belonged to the home team and the away club never appeared as a
+    defence.
+    """
+    cur = derived.cursor()
+    for game_id, drives in cur.execute(
+        "SELECT game_id, count(*) FROM derived_drives GROUP BY game_id"
+    ).fetchall():
+        assert drives == 8, game_id
+    owners = cur.execute(
+        "SELECT count(DISTINCT posteam), count(DISTINCT defteam) FROM derived_drives"
+    ).fetchone()
+    assert owners == (2, 2), "a drive belongs to one club and is defended by the other"
+
+
+def test_a_database_built_before_a_column_existed_is_widened_rather_than_broken(
+    built_loader,
+):
+    """`CREATE TABLE IF NOT EXISTS` is a no-op, so a new column needs an ALTER.
+
+    `sacks` and `sack_epa` were added to two tables after the first databases were
+    built. Without the widening the deployed table stays one column short and
+    every insert fails, because the derived rows name their columns explicitly —
+    and the failure is at build time, on a table that already returns rows.
+    """
+    built_loader.ensure("pbp")
+    cur = built_loader.cursor()
+    table = pbp_derive.table("derived_player_game_epa")
+    old_columns = [c for c in table.columns if c[0] not in ("sacks", "sack_epa")]
+    body = ", ".join(f'"{name}" {dtype}' for name, dtype in old_columns)
+    cur.execute("DROP TABLE IF EXISTS derived_player_game_epa")
+    cur.execute(f"CREATE TABLE derived_player_game_epa ({body})")
+
+    ensure_tables(cur)
+
+    present = [
+        row[0] for row in cur.execute("DESCRIBE derived_player_game_epa").fetchall()
+    ]
+    assert present == list(table.column_names)
+    # And the insert the build actually runs now works against it.
+    insert_season(built_loader.cursor(), built_loader.pbp_relation(2024), 2024,
+                  tables=[table])
+    assert built_loader.row_count("derived_player_game_epa") > 0
