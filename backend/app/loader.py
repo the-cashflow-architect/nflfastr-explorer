@@ -88,6 +88,9 @@ class Loader:
     def __init__(self, path: str | None = None, *, building: bool = False) -> None:
         self.db_path = path or duckdb_path()
         self.building = building
+        parent = os.path.dirname(self.db_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         self.conn = duckdb.connect(self.db_path)
         # Pinned before any bulk load. DuckDB sizes its buffer pool from *host*
         # RAM and cannot see a container's cgroup limit, so on a small instance it
