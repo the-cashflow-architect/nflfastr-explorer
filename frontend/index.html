@@ -7,7 +7,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <title>nflfastR Explorer</title>
+    <title>Gridiron — NFL reference</title>
+    <meta name="description" content="Every NFL player, team, game and season since 1999, with modern analytics and honest coverage." />
+    <script>
+      // Applied before first paint so a dark-mode visitor never sees a white
+      // flash. No attribute means "follow the system", which is what the CSS
+      // expects, so an unset or invalid preference is simply left alone.
+      (function () {
+        try {
+          var t = localStorage.getItem('gridiron.theme')
+          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t)
+          var d = localStorage.getItem('gridiron.density')
+          document.documentElement.setAttribute('data-density', d || 'compact')
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

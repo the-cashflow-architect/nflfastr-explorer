@@ -1,4 +1,4 @@
-import type { QuickSuggestion } from '../components/FilterBar'
+import type { QuickSuggestion } from '../components/finder/FilterBar'
 
 const range = (min: number | null, max: number | null) => ({ min, max })
 const one = (defId: string, value: unknown): QuickSuggestion['filters'] => [{ defId, value }]
