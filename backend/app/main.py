@@ -16,6 +16,7 @@ from .config import (
 )
 from .data_store import store
 from .models import ExportRequest, FilterOptionsRequest, QueryRequest, RankingsRequest, WeeklyBreakdownRequest
+from .routers import ALL_ROUTERS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Every package-owned router (coverage today; players, teams, games, ... as
+# each package lands) mounts here and nowhere else. This is additive by
+# construction — it never touches the dataset endpoints declared below.
+for _router in ALL_ROUTERS:
+    app.include_router(_router)
 
 
 @app.get("/api/health")

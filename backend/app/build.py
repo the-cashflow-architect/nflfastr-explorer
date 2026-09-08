@@ -20,7 +20,15 @@ import time
 
 from . import sources
 from .config import latest_season
+from .etl import derived
 from .loader import Loader
+
+# Importing these registers their derived tables. Without the imports the
+# registry is empty and the build silently produces sources only — which is
+# exactly the failure mode this job exists to prevent.
+from .etl import pbp_derive as _pbp_derive  # noqa: F401
+from .etl import standings as _standings  # noqa: F401
+from .repo import search as _search  # noqa: F401
 
 logger = logging.getLogger("build")
 
@@ -48,6 +56,12 @@ def report(loader: Loader) -> int:
         newest = max(r.loaded_at for r in rows)
         print(f"{source.id:22s} {window:>18s} {total:>12,}  {newest:%Y-%m-%d %H:%M}")
     print("-" * 72)
+    for entry in derived.all_derived():
+        stamp = derived.built_at(loader, entry.name)
+        state = "stale" if derived.is_stale(loader, entry) else "current"
+        when = f"{stamp:%Y-%m-%d %H:%M}" if stamp else "never built"
+        print(f"{entry.name:22s} {state:>18s} {'':>12s}  {when}")
+    print("-" * 72)
     print(f"disk: {loader.disk_usage_bytes() / 1e6:.0f} MB")
     return 0
 
@@ -58,6 +72,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--through", type=int, default=None, metavar="SEASON",
                         help="Latest season to load (default: the current one).")
     parser.add_argument("--report", action="store_true", help="Show what is loaded and exit.")
+    parser.add_argument(
+        "--sources-only",
+        action="store_true",
+        help="Fetch the source files but skip the derived tables.",
+    )
+    parser.add_argument(
+        "--derived-only",
+        action="store_true",
+        help="Rebuild the derived tables from sources already on disk.",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -79,15 +103,29 @@ def main(argv: list[str] | None = None) -> int:
 
     started = time.monotonic()
     failed: list[str] = []
-    for source_id in wanted:
+
+    if not args.derived_only:
+        for source_id in wanted:
+            step = time.monotonic()
+            try:
+                loader.ensure(source_id, through=through)
+            except Exception:
+                logger.exception("Failed to build %s", source_id)
+                failed.append(source_id)
+            else:
+                logger.info("%s ready in %.0fs", source_id, time.monotonic() - step)
+
+    # Derived tables are not optional extras. Standings, search and every summary
+    # that carries a season we do not keep plays for live here, so a deployment
+    # that fetched sources and stopped has a working API over an empty product.
+    if not args.sources_only:
         step = time.monotonic()
-        try:
-            loader.ensure(source_id, through=through)
-        except Exception:
-            logger.exception("Failed to build %s", source_id)
-            failed.append(source_id)
-        else:
-            logger.info("%s ready in %.0fs", source_id, time.monotonic() - step)
+        outcomes = derived.build_all(loader)
+        for name, outcome in outcomes.items():
+            logger.info("derived %s: %s", name, outcome)
+            if outcome == "failed":
+                failed.append(name)
+        logger.info("derived tables in %.0fs", time.monotonic() - step)
 
     logger.info(
         "Build finished in %.0fs — disk %.0f MB, peak memory %.0f MB",

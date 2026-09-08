@@ -22,7 +22,8 @@ half-finished build can simply be re-run. Nothing here is append-only.
 `SUM(numerator) / SUM(denominator)` computed at read time, which is the only way a
 career split can be a SUM over season rows instead of an average of averages
 (SPEC 0.7). `derived_player_season_situational` exists precisely so that a
-fifteen-season career split is 240 small rows rather than 700,000 plays.
+fifteen-season career split is a few hundred narrow rows to add up rather than a
+scan of every play the player was on the field for.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, Sequence
 
 from .alignment import canonical_team_sql
+from . import derived as derived_registry
 from .buckets import BUCKETS, ROLES
 
 logger = logging.getLogger(__name__)
@@ -145,7 +147,7 @@ d AS (
     arg_min(drive_time_of_possession, play_id) AS time_of_possession,
     arg_min(CAST(drive_first_downs AS INTEGER), play_id) AS first_downs,
     arg_min(fixed_drive_result, play_id) AS result,
-    max(CAST(drive_ended_with_score AS INTEGER)) AS scored,
+    arg_min(CAST(drive_ended_with_score AS INTEGER), play_id) AS scored,
     arg_min(drive_start_yard_line, play_id) AS start_yard_line,
     arg_min(drive_end_yard_line, play_id) AS end_yard_line
   FROM p
@@ -175,12 +177,18 @@ FROM y
 
 
 def _scoring_plays_sql(relation: str, season: int) -> str:
-    # nflfastR's running totals are the score *at the start of the play* — the same
-    # state the win-probability model is fed, and consistent with `score_differential`,
-    # which its own dictionary defines that way. The score a scoring play produced is
-    # therefore on the *next* row, which is why this reaches forward with LEAD rather
-    # than differencing backwards. Games end on a non-play row (END GAME), so the
-    # fallback only fires on a truncated file, not on a walk-off touchdown.
+    # Measured against the real 2024 file rather than assumed, because the two score
+    # columns in nflfastR do not share a convention:
+    #
+    #   * `total_home_score` / `total_away_score` are the score **after** the play.
+    #     On the Henry touchdown in 2024_01_BAL_KC the away total already reads 6 on
+    #     the touchdown's own row, and the last row of every game equals the final.
+    #   * `score_differential` is the state **before** the play. On that same
+    #     touchdown row it is still 0.
+    #
+    # Across all of 2024 the two agree on 43,012 of 46,779 plays, and the ~8% that
+    # disagree are exactly the scoring plays. So a scoring play's result is on its
+    # own row, and what needs looking up is the score it started from.
     return f"""
 WITH {_source(relation, season)},
 s AS (
@@ -199,16 +207,10 @@ s AS (
     COALESCE(CAST(extra_point_attempt AS INTEGER), 0) AS extra_point_attempt,
     COALESCE(CAST(two_point_attempt AS INTEGER), 0) AS two_point_attempt,
     field_goal_result,
-    CAST(total_home_score AS INTEGER) AS home_before,
-    CAST(total_away_score AS INTEGER) AS away_before,
-    COALESCE(
-      lead(CAST(total_home_score AS INTEGER)) OVER w,
-      CAST(total_home_score AS INTEGER)
-    ) AS home_after,
-    COALESCE(
-      lead(CAST(total_away_score AS INTEGER)) OVER w,
-      CAST(total_away_score AS INTEGER)
-    ) AS away_after
+    COALESCE(lag(CAST(total_home_score AS INTEGER)) OVER w, 0) AS home_before,
+    COALESCE(lag(CAST(total_away_score AS INTEGER)) OVER w, 0) AS away_before,
+    CAST(total_home_score AS INTEGER) AS home_after,
+    CAST(total_away_score AS INTEGER) AS away_after
   FROM p
   WINDOW w AS (PARTITION BY game_id ORDER BY play_id)
 )
@@ -342,7 +344,9 @@ SELECT
   a.game_id, a.season, a.week, a.team, a.opponent,
   a.plays, a.yards, a.epa_total, a.successes, a.dropbacks, a.first_downs,
   a.turnovers, a.penalties, a.penalty_yards,
-  COALESCE(d.top_seconds, 0) AS top_seconds,
+  -- Left NULL when no drive clock parsed. Zero would read as "this team never had
+  -- the ball", which is a claim rather than a gap.
+  d.top_seconds AS top_seconds,
   COALESCE(d.drives, 0) AS drives
 FROM agg a
 LEFT JOIN drive_roll d ON d.game_id = a.game_id AND d.team = a.team
@@ -370,9 +374,7 @@ def _player_game_epa_sql(relation: str, season: int) -> str:
     # COALESCE(...,0) here would turn "nobody charted it" into "he threw it at the
     # line of scrimmage" for seven seasons. Rushing rows are NULL for the same
     # reason in every season: a run has no air yards.
-    columns = (
-        "game_id, play_id, week, posteam, epa, success, air_yards"
-    )
+    columns = "game_id, play_id, week, posteam, epa, success, air_yards"
     return f"""
 WITH {_source(relation, season)},
 r AS (
@@ -402,7 +404,7 @@ def _situational_sql(relation: str, season: int) -> str:
     # is deliberately not a GROUP BY over a bucket column: a play belongs to several
     # of them and each one counts it once.
     columns = (
-        "play_id, epa, success, yards_gained, first_down,"
+        "play_id, season_type, epa, success, yards_gained, first_down,"
         " down, ydstogo, yardline_100, qtr, half_seconds_remaining,"
         " score_differential, wp"
     )
@@ -410,7 +412,7 @@ def _situational_sql(relation: str, season: int) -> str:
     for b in BUCKETS:
         branches.append(
             f"""  SELECT
-    {int(season)} AS season, gsis_id, role, '{b.key}' AS bucket,
+    {int(season)} AS season, season_type, gsis_id, role, '{b.key}' AS bucket,
     count(*) AS plays,
     sum(CAST(epa AS DOUBLE)) AS epa_total,
     sum(CAST(success AS INTEGER)) AS successes,
@@ -419,7 +421,7 @@ def _situational_sql(relation: str, season: int) -> str:
     sum(CAST(first_down AS INTEGER)) AS first_downs
   FROM r
   WHERE {b.predicate}
-  GROUP BY gsis_id, role"""
+  GROUP BY season_type, gsis_id, role"""
         )
     head = f"""
 WITH {_source(relation, season)},
@@ -536,6 +538,11 @@ TABLES: tuple[DerivedTable, ...] = (
         description="Per player, season, role and bucket: counts only, so careers pool.",
         columns=(
             ("season", "INTEGER"),
+            # The one key not in the spec's grain. This table has no game_id, so
+            # without it a January playoff run is silently pooled into the regular
+            # season and the Splits page's Regular/Postseason toggle has nothing to
+            # read. Summing over it recovers the specced grain exactly.
+            ("season_type", "VARCHAR"),
             ("gsis_id", "VARCHAR"),
             ("role", "VARCHAR"),
             ("bucket", "VARCHAR"),
@@ -627,3 +634,35 @@ def derive_all(loader, seasons: Iterable[int]) -> dict[int, dict[str, int]]:
     for season in seasons:
         results[season] = derive_season(loader, season)
     return results
+
+
+def _build_all_seasons(loader) -> None:
+    """Derive every season the play-by-play source covers.
+
+    This is the expensive half of the build job, and it is the reason the site
+    can answer questions about 2003 without holding 2003's plays: the six tables
+    below are what survives after the season is released.
+    """
+    from .. import sources
+    from ..config import latest_season
+
+    seasons = sources.get("pbp").seasons(latest_season())
+    total = derive_all(loader, seasons)
+    rows = sum(sum(counts.values()) for counts in total.values())
+    derived_registry.record_build(loader, DERIVED_NAME, rows)
+
+
+DERIVED_NAME = "pbp_derived"
+
+DERIVED = derived_registry.register(
+    derived_registry.Derived(
+        name=DERIVED_NAME,
+        depends_on=("pbp", "games"),
+        build=_build_all_seasons,
+        description=(
+            "Drives, scoring plays, win-probability series, per-game team and player "
+            "totals, and situational splits — the summaries that carry every season "
+            "we do not keep plays for."
+        ),
+    )
+)

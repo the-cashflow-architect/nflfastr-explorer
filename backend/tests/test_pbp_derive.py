@@ -201,14 +201,14 @@ def test_a_career_rate_pools_the_counts_and_is_not_the_mean_of_season_rates(
     for season, plays, successes in ((1998, 10, 3), (1999, 4, 3)):
         for i in range(plays):
             rows.append(
-                f"({season}, 1, 'G{season}', {i + 1}, 'KC', 'BUF', 1, 10, 50, 1, "
+                f"({season}, 1, 'REG', 'G{season}', {i + 1}, 'KC', 'BUF', 1, 10, 50, 1, "
                 f"'00-0000001', {1 if i < successes else 0}, 0.5, 5, 0, 900, 0)"
             )
     _plays_table(
         cur,
         "pooled_plays",
         "SELECT * FROM (VALUES " + ",\n".join(rows) + ") AS t("
-        "season, week, game_id, play_id, posteam, defteam, down, ydstogo,"
+        "season, week, season_type, game_id, play_id, posteam, defteam, down, ydstogo,"
         " yardline_100, qtr, passer_player_id, success, epa, yards_gained,"
         " first_down, half_seconds_remaining, score_differential)",
     )
@@ -292,11 +292,18 @@ def test_the_wp_series_covers_every_game_in_the_season(derived):
 
 
 def test_a_scoring_play_carries_the_score_it_produced(built_loader):
-    """nflfastR's running totals are the score at the *start* of the play.
+    """nflfastR's two score columns do not share a convention. Pinned, not assumed.
 
-    So a touchdown row still says 0-0 and the six points appear on the next row.
-    Reading them as post-play scores would put every scoring summary one play out
-    of step, which is why this is pinned rather than assumed.
+    Measured on the real 2024 file: `total_home_score` / `total_away_score` are the
+    score **after** the play — the Henry touchdown in 2024_01_BAL_KC already reads
+    6 on its own row, and the last row of every game equals the final score — while
+    `score_differential` on that same row is still 0, because it is the state
+    before the snap. Across the season the two agree on 43,012 of 46,779 plays and
+    the ~8% that disagree are exactly the scoring plays.
+
+    Reading the totals as pre-play, as an earlier version of this table did, put
+    every scoring summary one play out of step: the touchdown was reported at 0-0
+    and its points were attributed to whatever happened next.
     """
     built_loader.ensure("pbp")
     cur = built_loader.cursor()
@@ -307,10 +314,10 @@ def test_a_scoring_play_carries_the_score_it_produced(built_loader):
         """
         SELECT * FROM (VALUES
           (1998, 1, 'S1', 1, 'KC', 'BUF', 'KC', 'BUF', 0, 0, 0, 0, 0, NULL),
-          (1998, 1, 'S1', 2, 'KC', 'BUF', 'KC', 'BUF', 0, 0, 1, 1, 0, NULL),
-          (1998, 1, 'S1', 3, 'KC', 'BUF', 'KC', 'BUF', 6, 0, 1, 0, 1, NULL),
+          (1998, 1, 'S1', 2, 'KC', 'BUF', 'KC', 'BUF', 6, 0, 1, 1, 0, NULL),
+          (1998, 1, 'S1', 3, 'KC', 'BUF', 'KC', 'BUF', 7, 0, 1, 0, 1, NULL),
           (1998, 1, 'S1', 4, 'BUF', 'KC', 'KC', 'BUF', 7, 0, 0, 0, 0, NULL),
-          (1998, 1, 'S1', 5, 'BUF', 'KC', 'KC', 'BUF', 7, 0, 1, 0, 0, 'made'),
+          (1998, 1, 'S1', 5, 'BUF', 'KC', 'KC', 'BUF', 7, 3, 1, 0, 0, 'made'),
           (1998, 1, 'S1', 6, 'KC', 'BUF', 'KC', 'BUF', 7, 3, 0, 0, 0, NULL)
         ) AS t(season, week, game_id, play_id, posteam, defteam, home_team, away_team,
                total_home_score, total_away_score, sp, touchdown,
@@ -332,6 +339,46 @@ def test_a_scoring_play_carries_the_score_it_produced(built_loader):
         (3, "extra_point", "KC", 7, 0),
         (5, "field_goal", "BUF", 7, 3),
     ]
+
+
+def test_the_scoring_table_and_the_win_probability_series_agree_on_the_score(built_loader):
+    """The two tables read the same columns, so they must read them the same way.
+
+    They disagreed once — one reached forward with LEAD, the other did not — which
+    made a game page show a different score in its scoring summary than in its win
+    probability tooltip for the same play.
+    """
+    built_loader.ensure("pbp")
+    cur = built_loader.cursor()
+    ensure_tables(cur)
+    _plays_table(
+        cur,
+        "agree_src",
+        """
+        SELECT * FROM (VALUES
+          (1998, 1, 'A1', 1, 'KC', 'BUF', 'KC', 'BUF', 0, 0, 0, 0, 0, NULL, 0.50, 3600),
+          (1998, 1, 'A1', 2, 'KC', 'BUF', 'KC', 'BUF', 6, 0, 1, 1, 0, NULL, 0.61, 3500),
+          (1998, 1, 'A1', 3, 'KC', 'BUF', 'KC', 'BUF', 7, 0, 1, 0, 1, NULL, 0.63, 3480)
+        ) AS t(season, week, game_id, play_id, posteam, defteam, home_team, away_team,
+               total_home_score, total_away_score, sp, touchdown,
+               extra_point_attempt, field_goal_result, home_wp, game_seconds_remaining)
+        """,
+    )
+    insert_season(cur, "agree_src", 1998)
+    scoring = dict(
+        cur.execute(
+            "SELECT play_id, home_score FROM derived_scoring_plays WHERE game_id = 'A1'"
+        ).fetchall()
+    )
+    series = dict(
+        cur.execute(
+            "SELECT play_id, home_score FROM derived_wp_series WHERE game_id = 'A1'"
+        ).fetchall()
+    )
+    shared = set(scoring) & set(series)
+    assert shared, "the two tables should cover at least one play in common"
+    for play_id in shared:
+        assert scoring[play_id] == series[play_id]
 
 
 def test_the_running_score_never_goes_backwards(derived):
@@ -364,10 +411,62 @@ def test_deriving_one_season_never_writes_another_seasons_rows(built_loader):
         assert seasons == [2001], name
 
 
-def test_zzz_debug(derived):
+
+def test_every_bucket_is_reachable(built_loader):
+    """The fixture seasons contain no red-zone snap and no blowout.
+
+    Four hand-placed plays put a snap in all sixteen situations, so a predicate
+    that never matches anything — a column renamed upstream, a sign flipped — fails
+    here rather than silently shipping an always-empty split.
+    """
+    built_loader.ensure("pbp")
+    cur = built_loader.cursor()
+    ensure_tables(cur)
+    _plays_table(
+        cur,
+        "bucket_plays",
+        """
+        SELECT * FROM (VALUES
+          -- 1st and short at the 5, two minutes left in the half, ahead, blowout.
+          (1998, 1, 'REG', 'B1', 1, 'KC', 1, 3, 5,  1, 60,  3, 0.02, '00-0000001'),
+          -- 2nd and medium, midfield, second half, tied.
+          (1998, 1, 'REG', 'B1', 2, 'KC', 2, 5, 50, 3, 900, 0, 0.50, '00-0000001'),
+          -- 3rd and long, own half, fourth quarter, behind.
+          (1998, 1, 'REG', 'B1', 3, 'KC', 3, 10, 60, 4, 800, -7, 0.50, '00-0000001'),
+          (1998, 1, 'REG', 'B1', 4, 'KC', 4, 2, 40, 4, 700, -7, 0.50, '00-0000001')
+        ) AS t(season, week, season_type, game_id, play_id, posteam, down, ydstogo,
+               yardline_100, qtr, half_seconds_remaining, score_differential, wp,
+               passer_player_id)
+        """,
+    )
+    insert_season(
+        cur,
+        "bucket_plays",
+        1998,
+        tables=[pbp_derive.table("derived_player_season_situational")],
+    )
+    found = {
+        row[0]
+        for row in cur.execute(
+            "SELECT DISTINCT bucket FROM derived_player_season_situational "
+            "WHERE season = 1998"
+        ).fetchall()
+    }
+    assert found == set(BUCKET_KEYS)
+
+
+def test_situational_counts_match_the_plays_they_came_from(derived):
+    """The bucket predicates mean the same thing in the ETL and against the plays."""
     cur = derived.cursor()
-    for name in derived_tables():
-        print("\n==", name, cur.execute(f"select count(*) from {name}").fetchone())
-        print(cur.execute(f"select * from {name} limit 4").df().to_string())
-    print(cur.execute("select season, bucket, role, count(*), sum(plays) from derived_player_season_situational group by 1,2,3 order by 1,2,3").df().to_string())
-    print(cur.execute("select * from derived_game_team_stats limit 4").df().to_string())
+    relation = derived.pbp_relation(2024)
+    for bucket in BUCKETS:
+        derived_plays = cur.execute(
+            "SELECT COALESCE(sum(plays), 0) FROM derived_player_season_situational "
+            "WHERE season = 2024 AND role = 'passer' AND bucket = ?",
+            [bucket.key],
+        ).fetchone()[0]
+        raw = cur.execute(
+            f"SELECT count(*) FROM {relation} AS p WHERE season = 2024 "
+            f"AND passer_player_id IS NOT NULL AND ({bucket.predicate})"
+        ).fetchone()[0]
+        assert derived_plays == raw, bucket.key

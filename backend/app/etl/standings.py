@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from itertools import permutations
 from typing import TYPE_CHECKING, Callable, Iterable, Mapping, Sequence
 
-from . import alignment
+from . import alignment, derived
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..loader import Loader
@@ -124,9 +124,12 @@ FORMULAS: dict[str, str] = {
         "For a completed season, read off the bracket: the clubs with a first-round "
         "bye hold the top seeds, first-round hosts the next, and each host's "
         "opponent takes the seed the format pairs it with; later rounds re-seed "
-        "highest against lowest, which pins the remaining order. For a season still "
-        "in progress, division winners are seeded above wild cards and each group is "
-        "ordered by the tiebreaker ladder — those rows are flagged projected."
+        "highest against lowest, which usually pins the rest. Where two clubs' paths "
+        "were symmetric — most often the two first-round hosts, who never meet — the "
+        "bracket cannot separate them and regular-season record does, which the row "
+        "says. For a season still in progress, division winners are seeded above "
+        "wild cards and each group is ordered by the tiebreaker ladder; those rows "
+        "are flagged projected."
     ),
     "point_differential": "points for - points against (regular season)",
     "longest_win_streak": "longest run of consecutive regular-season wins",
@@ -167,6 +170,9 @@ class BuildReport:
     iterations: dict[int, int]
     #: Seasons whose bracket could not be read as a seeding, with the reason.
     unseeded: dict[int, str]
+    #: Seasons whose rating solve hit the iteration ceiling. Their SRS is the last
+    #: iterate rather than the fixed point, which is worth saying out loud.
+    unconverged: tuple[int, ...] = ()
 
 
 @dataclass
@@ -605,32 +611,29 @@ def _record_order_key(team: str, teams: Mapping[str, TeamSeason], winners: set[s
 
 
 def project_seeds(
-    conference_teams: Sequence[str],
     teams: Mapping[str, TeamSeason],
-    divisions: Mapping[str, list[str]],
+    divisions: Mapping[tuple[str, str], list[str]],
     seeds: int,
 ) -> list[tuple[str, int, str | None]]:
-    """Seed a conference from the tiebreaker ladder, for a season still running.
+    """Seed one conference from the tiebreaker ladder, for a season still running.
 
     Division winners take the top seeds and wild cards the rest, which is the one
-    part of seeding that is not a matter of record at all. Wild cards are picked a
-    club at a time from the best club left in each division, because the league
+    part of seeding that is not a matter of record at all. Wild cards are then picked
+    a club at a time from the best club left in each division, because the league
     settles a division's internal order before letting two of its clubs compete for
-    the same wild-card slot.
+    the same wild-card slot — the rule the spec calls "division ties resolve before
+    wild-card ties".
     """
-    remaining = {
-        key: [team for team, _ in rank_group(members, teams)]
-        for key, members in divisions.items()
-    }
     notes: dict[str, str | None] = {}
+    remaining: dict[tuple[str, str], list[str]] = {}
     winners: list[str] = []
-    for key, members in remaining.items():
+    for key, members in divisions.items():
         if not members:
             continue
         ordered = rank_group(members, teams)
         winners.append(ordered[0][0])
         notes[ordered[0][0]] = ordered[0][1]
-        remaining[key] = [team for team, _ in ordered][1:]
+        remaining[key] = [team for team, _ in ordered[1:]]
 
     seeded: list[tuple[str, int, str | None]] = []
     for team, note in rank_group(winners, teams):
@@ -662,7 +665,7 @@ def _fetch_games(cur, seasons: Sequence[int] | None) -> list[Game]:
     # Older snapshots of the file do not carry it; absent, nothing is neutral, which
     # only costs us the home/away split on a handful of games.
     location = '"location"' if "location" in columns else "NULL"
-    where = f"WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+    where = "WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
     params: list = []
     if seasons is not None:
         where += f" AND season IN ({', '.join('?' * len(seasons))})"
@@ -694,7 +697,10 @@ def _streak(results: Sequence[tuple[int, str]]) -> tuple[str | None, int, int]:
     """(current streak kind, its length, longest win streak)."""
     if not results:
         return None, 0, 0
-    outcomes = [outcome for _, outcome in sorted(results)]
+    # Sorted by week only, and stably: two games in the same week keep the order
+    # they were read in, which is the order `_fetch_games` put them in. Sorting the
+    # tuples whole would order a week's games by outcome letter instead.
+    outcomes = [outcome for _, outcome in sorted(results, key=lambda r: r[0])]
     kind = outcomes[-1]
     length = 0
     for outcome in reversed(outcomes):
@@ -714,10 +720,16 @@ def season_rows(season: int, games_played: Sequence[Game]) -> list[dict]:
     `games_played` must already exclude unplayed games; a club that never took the
     field gets no row, which is how the 2026 schedule stays out of the table.
     """
+    return _season(season, games_played)[0]
+
+
+def _season(
+    season: int, games_played: Sequence[Game]
+) -> tuple[list[dict], RatingSolution | None]:
     regular = [g for g in games_played if g.game_type == "REG"]
     postseason = [g for g in games_played if g.game_type in ROUND_ORDER]
     if not regular:
-        return []
+        return [], None
 
     teams: dict[str, TeamSeason] = {}
     for code in sorted({g.home for g in regular} | {g.away for g in regular}):
@@ -836,7 +848,7 @@ def season_rows(season: int, games_played: Sequence[Game]) -> list[dict]:
             }
         )
     rows.sort(key=lambda r: (r["conference"], r["division"], r["division_rank"]))
-    return rows
+    return rows, ratings
 
 
 def _seed_season(
@@ -882,9 +894,7 @@ def _seed_season(
                 )
                 out[code] = (seed, basis, note, False)
         else:
-            for code, seed, note in project_seeds(
-                members, teams, conference_divisions, seeds
-            ):
+            for code, seed, note in project_seeds(teams, conference_divisions, seeds):
                 out[code] = (seed, SEED_BASIS_PROJECTED, note, True)
     return out
 
@@ -930,16 +940,16 @@ def build(loader: "Loader", *, seasons: Sequence[int] | None = None) -> BuildRep
     rows: list[dict] = []
     iterations: dict[int, int] = {}
     unseeded: dict[int, str] = {}
+    unconverged: list[int] = []
     for season in sorted(by_season):
-        season_games = by_season[season]
-        produced = season_rows(season, season_games)
+        produced, ratings = _season(season, by_season[season])
         if not produced:
             # Scheduled but not started — the 2026 rows land here and go no further.
             continue
         rows.extend(produced)
-        iterations[season] = solve_ratings(
-            {}, {}, {}
-        ).iterations if False else _iterations_for(season, season_games)
+        iterations[season] = ratings.iterations if ratings else 0
+        if ratings is not None and not ratings.converged:
+            unconverged.append(season)
         if any(r["made_playoffs"] and r["playoff_seed"] is None for r in produced):
             unseeded[season] = (
                 "The postseason games on file do not describe a full bracket, so no "
@@ -947,35 +957,58 @@ def build(loader: "Loader", *, seasons: Sequence[int] | None = None) -> BuildRep
             )
 
     columns = ", ".join(f"{name} {dtype}" for name, dtype in _COLUMNS)
-    cur.execute(f"CREATE OR REPLACE TABLE {TABLE} ({columns})")
-    if rows:
-        placeholders = ", ".join("?" * len(COLUMN_NAMES))
-        cur.executemany(
-            f"INSERT INTO {TABLE} VALUES ({placeholders})",
-            [[row[name] for name in COLUMN_NAMES] for row in rows],
-        )
+    placeholders = ", ".join("?" * len(COLUMN_NAMES))
+    values = [[row[name] for name in COLUMN_NAMES] for row in rows]
+
+    if seasons is None:
+        # Full rebuild. Built into a staging table and swapped in one statement so
+        # a concurrent reader never sees the table half-populated — the same shape
+        # the source loader uses.
+        staging = f"{TABLE}__staging"
+        cur.execute(f"DROP TABLE IF EXISTS {staging}")
+        cur.execute(f"CREATE TABLE {staging} ({columns})")
+        if values:
+            cur.executemany(f"INSERT INTO {staging} VALUES ({placeholders})", values)
+        cur.execute(f"DROP TABLE IF EXISTS {TABLE}")
+        cur.execute(f"ALTER TABLE {staging} RENAME TO {TABLE}")
+    else:
+        # A partial rebuild must not delete the seasons it was not asked about,
+        # so it replaces season by season rather than replacing the table.
+        if not _table_exists(cur, TABLE):
+            cur.execute(f"CREATE TABLE {TABLE} ({columns})")
+        for season in sorted(set(seasons)):
+            cur.execute(f"DELETE FROM {TABLE} WHERE season = ?", [season])
+        if values:
+            cur.executemany(f"INSERT INTO {TABLE} VALUES ({placeholders})", values)
+    derived.record_build(loader, TABLE, len(rows))
     logger.info("Built %s: %s rows over %s seasons", TABLE, len(rows), len(iterations))
-    return BuildReport(tuple(sorted(iterations)), len(rows), iterations, unseeded)
+    return BuildReport(
+        tuple(sorted(iterations)), len(rows), iterations, unseeded, tuple(unconverged)
+    )
 
 
-def _iterations_for(season: int, games_played: Sequence[Game]) -> int:
-    """How many passes the rating solve needed for this season."""
-    regular = [g for g in games_played if g.game_type == "REG"]
-    schedules: dict[str, list[str]] = {}
-    points_for: dict[str, int] = {}
-    points_against: dict[str, int] = {}
-    for game in regular:
-        for team, opponent, scored, allowed in (
-            (game.home, game.away, game.home_score, game.away_score),
-            (game.away, game.home, game.away_score, game.home_score),
-        ):
-            schedules.setdefault(team, []).append(opponent)
-            points_for[team] = points_for.get(team, 0) + scored
-            points_against[team] = points_against.get(team, 0) + allowed
-    return solve_ratings(schedules, points_for, points_against).iterations
+def _table_exists(cur, table: str) -> bool:
+    row = cur.execute(
+        "SELECT count(*) FROM duckdb_tables() WHERE table_name = ?", [table]
+    ).fetchone()
+    return bool(row and row[0])
+
+
+DERIVED = derived.register(
+    derived.Derived(
+        name=TABLE,
+        depends_on=("games",),
+        build=lambda loader: build(loader),
+        description="Team records, division finish, playoff seeding and SRS-family ratings.",
+    )
+)
 
 
 def ensure(loader: "Loader") -> None:
-    """Build the table if it is not there. Cheap enough to call on every read."""
-    if not loader.table_exists(TABLE):
-        build(loader)
+    """Build the table if it is missing or older than the schedule it reads.
+
+    Delegated rather than a bare existence check: the table is a function of
+    `games`, so a refreshed schedule makes it wrong while leaving it present, and
+    a bare check would serve last week's standings forever.
+    """
+    derived.ensure(loader, TABLE, table=TABLE)

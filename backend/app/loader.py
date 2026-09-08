@@ -133,9 +133,29 @@ class Loader:
         """
         return self.conn.cursor()
 
-    def _lock_for(self, key: str) -> threading.Lock:
+    def lock_for(self, key: str) -> threading.Lock:
+        """A named process-wide lock, so two requests never build the same thing twice.
+
+        Public because derived tables need the same guarantee the sources get: a
+        `CREATE OR REPLACE` racing a reader is a catalog conflict at best and a
+        half-populated table at worst.
+        """
         with self._locks_guard:
             return self._locks.setdefault(key, threading.Lock())
+
+    def _lock_for(self, key: str) -> threading.Lock:
+        return self.lock_for(key)
+
+    def newest_load(self, *source_ids: str) -> datetime | None:
+        """When any of these sources last changed — the input to staleness checks."""
+        if not source_ids:
+            return None
+        placeholders = ", ".join("?" * len(source_ids))
+        row = self.cursor().execute(
+            f"SELECT max(loaded_at) FROM {LOAD_LOG} WHERE source_id IN ({placeholders})",
+            list(source_ids),
+        ).fetchone()
+        return row[0] if row else None
 
     # -- freshness ----------------------------------------------------------
 
