@@ -97,9 +97,28 @@ season rates is wrong and is a review failure.
 
 ### 0.8 Playoff seeding
 
-For **completed** seasons, seeds are **derived from actual postseason results in
-`games.csv`** — who hosted whom in which round determines seeding exactly. No
-tiebreaker engine runs on history, so no history can be wrong.
+For **completed** seasons, seeds are **read off the bracket in `games.csv`** — who
+hosted whom in which round constrains the seeding, so no tiebreaker engine runs on
+history and no history can be guessed wrong.
+
+An earlier version of this section said the bracket determines seeding *exactly*.
+Measured against real brackets, that is not true in the six-seed era: nothing
+separates seed 3 from seed 4 unless those two clubs meet, because swapping the
+first-round hosts also swaps their opponents and explains every game equally well.
+Verified on the real 2004 AFC bracket (the byes are pinned, the four wild-card
+clubs are not) and the real 2001 NFC (nothing is pinned, because St. Louis and
+Chicago never met).
+
+So the implementation **enumerates every seeding a bracket allows**. One surviving
+candidate means `seed_basis = "postseason results"`. Several means the league's own
+ordering — division winners first, then win percentage, then point differential —
+picks among them, `seed_basis` says so, and the affected rows carry a note. The
+2015 AFC bracket is recovered exactly with no record input at all.
+
+A season counts as completed when it has a played Super Bowl, not when it has no
+unplayed games: the 2022 Bills–Bengals game was cancelled and never played, and the
+second definition would leave that season permanently "in progress" and stamp
+projected seeds onto finished history.
 
 For an **in-progress** season only, a five-level tiebreaker approximation runs and
 every seeded row is labelled `projected`, with an explicit "our rules could not break

@@ -12,7 +12,7 @@ Two ideas do most of the work:
   carry a TTL. This is what makes covering 27 seasons cheaper per day than covering
   four was.
 * **Projection is declared, not discovered.** Play-by-play is 372 columns wide and we
-  read 66 of them. The projection is pushed into the parquet reader, so the columns
+  read 77 of them. The projection is pushed into the parquet reader, so the columns
   we skip are never decompressed, never allocated, and never counted against the
   128 MB DuckDB budget.
 """
@@ -77,9 +77,9 @@ class Source:
 
 # --- Play-by-play projection -------------------------------------------------
 #
-# 66 of 372 columns. Every one is used by a derived table or the play log; adding
-# a column here means adding it to the ETL that consumes it, or it is dead weight
-# on every season we read.
+# 77 of 372 columns, verified present in every season from 1999 to 2025. Every one
+# is used by a derived table or the play log; adding a column here means adding the
+# ETL that consumes it, or it is dead weight on every season we read.
 PBP_COLUMNS: tuple[str, ...] = (
     # where and when
     "season", "week", "game_id", "play_id", "season_type",
@@ -398,7 +398,7 @@ SOURCES: tuple[Source, ...] = (
         id="pbp",
         table="pbp",
         name="Play-by-play",
-        description="Every play since 1999 with expected points, win probability and success, projected to the 66 columns the site uses.",
+        description="Every play since 1999 with expected points, win probability and success, projected to the 77 columns the site uses.",
         url=f"{RELEASE}/pbp/play_by_play_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
