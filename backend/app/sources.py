@@ -56,6 +56,13 @@ class Source:
     #: Human-readable caveat surfaced by `/api/coverage` and the era badges.
     coverage_note: str = ""
     format: Literal["parquet", "csv"] = "parquet"
+    #: Columns holding a team code, rewritten to the current franchise code as the
+    #: file loads. Sources disagree about whether a 1999 row says STL or LA;
+    #: normalising here means nothing downstream has to know or care.
+    team_columns: tuple[str, ...] = ()
+    #: Applied as a WHERE clause at load. Used to drop the single unattributed
+    #: row nflverse emits in each weekly team and player file.
+    where_sql: str | None = None
 
     def url_for(self, season: int | None = None) -> str:
         return self.url.format(season=season) if self.grain == "season" else self.url
@@ -117,7 +124,9 @@ ADVSTATS_FIRST_SEASON = 2018
 SNAP_COUNTS_FIRST_SEASON = 2012
 INJURIES_FIRST_SEASON = 2009
 QBR_FIRST_SEASON = 2006
-DRAFT_FIRST_SEASON = 1936
+# The draft file starts in 1980, not at the first NFL draft. It is still the only
+# block on the site that reaches before 1999.
+DRAFT_FIRST_SEASON = 1980
 
 
 SOURCES: tuple[Source, ...] = (
@@ -135,6 +144,7 @@ SOURCES: tuple[Source, ...] = (
         format="csv",
         first_season=FIRST_SEASON,
         ttl_hours=12,
+        team_columns=("home_team", "away_team"),
         coverage_note="Includes future scheduled games, which have no score yet.",
     ),
     Source(
@@ -182,7 +192,10 @@ SOURCES: tuple[Source, ...] = (
             "rec_yards", "rec_tds", "def_solo_tackles", "def_ints", "def_sacks",
         ),
         coverage_note=(
-            "The only block on the site with pre-1999 history. car_av is empty in the "
+            "The only block on the site with pre-1999 history: 1980 onward. Team codes "
+            "here are Pro-Football-Reference's, and three of them mean different "
+            "franchises in different decades, so they are resolved by season rather "
+            "than mapped blindly. car_av is empty in the "
             "source for every row; w_av (weighted career AV) is the usable figure and "
             "exists for drafted players only."
         ),
@@ -204,6 +217,7 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/stats_player/stats_player_reg_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
+        team_columns=("team",),
     ),
     Source(
         id="player_season_post",
@@ -214,6 +228,7 @@ SOURCES: tuple[Source, ...] = (
         grain="season",
         first_season=FIRST_SEASON,
         optional=True,
+        team_columns=("team",),
     ),
     Source(
         id="player_week",
@@ -223,6 +238,8 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/stats_player/stats_player_week_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
+        team_columns=("team", "opponent_team"),
+        where_sql='"team" IS NOT NULL',
     ),
     Source(
         id="team_season",
@@ -237,6 +254,8 @@ SOURCES: tuple[Source, ...] = (
             "not what it allowed. Allowed-side figures are computed by summing opponents' "
             "offensive rows."
         ),
+        team_columns=("team",),
+        where_sql='"team" IS NOT NULL',
     ),
     Source(
         id="team_week",
@@ -246,6 +265,8 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/stats_team/stats_team_week_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
+        team_columns=("team", "opponent_team"),
+        where_sql='"team" IS NOT NULL',
     ),
     Source(
         id="rosters",
@@ -255,6 +276,7 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/rosters/roster_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
+        team_columns=("team", "draft_club"),
         columns=(
             "season", "team", "position", "depth_chart_position", "jersey_number",
             "status", "full_name", "gsis_id", "pfr_id", "birth_date", "height",
@@ -271,6 +293,7 @@ SOURCES: tuple[Source, ...] = (
         grain="season",
         first_season=SNAP_COUNTS_FIRST_SEASON,
         coverage_note="From 2012. Matched to players through pfr_id, which resolves about 99.8% of rows.",
+        team_columns=("team", "opponent"),
     ),
     Source(
         id="injuries",
@@ -281,6 +304,7 @@ SOURCES: tuple[Source, ...] = (
         grain="season",
         first_season=INJURIES_FIRST_SEASON,
         coverage_note="From 2009.",
+        team_columns=("team",),
     ),
     Source(
         id="ngs_passing",
@@ -378,6 +402,7 @@ SOURCES: tuple[Source, ...] = (
         url=f"{RELEASE}/pbp/play_by_play_{{season}}.parquet",
         grain="season",
         first_season=FIRST_SEASON,
+        team_columns=("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team"),
         columns=PBP_COLUMNS,
         coverage_note=(
             "Expected points and win probability run from 1999. Air yards, yards after "

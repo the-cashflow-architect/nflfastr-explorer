@@ -7,6 +7,7 @@ container (Render's free tier is 512 MB) without the operator editing code.
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 
@@ -58,6 +59,31 @@ def cors_origin_regex() -> str | None:
     return os.environ.get("CORS_ORIGIN_REGEX") or None
 
 
+def data_dir() -> str:
+    """Directory holding the database, the season caches and the scratch space."""
+    path = Path(os.environ.get("DATA_DIR", "data")).expanduser()
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+def latest_season() -> int:
+    """The NFL season currently in progress or most recently played.
+
+    A season is labelled by the calendar year it kicks off in and runs into
+    February, so anything before March still belongs to the previous label.
+    Files for a season that has not kicked off yet simply 404 and are skipped,
+    which is why this can be a date calculation and not a configured constant.
+    """
+    override = os.environ.get("LATEST_SEASON")
+    if override:
+        try:
+            return int(override)
+        except ValueError:
+            pass
+    today = date.today()
+    return today.year if today.month >= 3 else today.year - 1
+
+
 # Persisted DuckDB file. Keeping the data on disk rather than in :memory:
 # means a restart re-opens the existing tables instead of re-downloading
 # every parquet file from nflverse, and keeps resident memory flat.
@@ -80,8 +106,19 @@ PBP_SEASONS = _seasons_env("PBP_SEASONS", [2025])
 DUCKDB_MEMORY_LIMIT = os.environ.get("DUCKDB_MEMORY_LIMIT", "128MB")
 DUCKDB_THREADS = _int_env("DUCKDB_THREADS", 1)
 
+# Serving reads pages; building writes twenty-seven seasons of them. The write
+# side needs more headroom than the read side, and the build runs as its own job,
+# so the two get separate budgets rather than one compromise number that is too
+# small to build with and too large to serve on.
+DUCKDB_BUILD_MEMORY_LIMIT = os.environ.get("DUCKDB_BUILD_MEMORY_LIMIT", "256MB")
+
 # Seconds to wait on an nflverse parquet download.
 DOWNLOAD_TIMEOUT = _int_env("DOWNLOAD_TIMEOUT", 180)
+
+# Attempts per file before giving up. A full build pulls around forty files and
+# GitHub's asset CDN returns the occasional 502; without retries one flaky
+# download ends a three-minute job.
+DOWNLOAD_RETRIES = _int_env("DOWNLOAD_RETRIES", 4)
 
 # Hard ceiling on an export. Without this, an unfiltered play-by-play export
 # materialises the entire table in memory and takes the process down.
@@ -98,3 +135,18 @@ DATA_MAX_AGE_HOURS = _int_env("DATA_MAX_AGE_HOURS", 24)
 # Load datasets in a background thread at startup so the first user request
 # isn't stuck behind a multi-minute download. Disable to load fully lazily.
 PRELOAD_ON_STARTUP = _bool_env("PRELOAD_ON_STARTUP", True)
+
+
+# Play-by-play is the one dataset too large to hold whole. The most recent
+# seasons live permanently in the main database; older ones are materialised on
+# demand into their own attached files and evicted by deleting them.
+PBP_RESIDENT_SEASONS = _int_env("PBP_RESIDENT_SEASONS", 6)
+
+# How many older seasons may be cached on disk at once. Two lets a visitor
+# compare across seasons; a third concurrent request is refused rather than
+# queued, because three simultaneous downloads is how a small instance dies.
+PBP_CACHE_SEASONS = _int_env("PBP_CACHE_SEASONS", 2)
+
+# The first season the site claims to cover. Below this we have no play data,
+# and every leaderboard says so rather than implying an all-time list.
+STATS_FIRST_SEASON = _int_env("STATS_FIRST_SEASON", 1999)

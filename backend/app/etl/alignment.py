@@ -11,9 +11,16 @@ publishes — carries *current* division only. Using it to group a 2001 season s
 produces standings that never existed. So membership is authored here, by season, and
 every standings surface reads it rather than the CSV.
 
-Three-letter codes follow the source files: a franchise's code changes when it moves
-(STL -> LA in 2016, SD -> LAC in 2017, OAK -> LV in 2020), so a code identifies a
-team *in a season*, and `current_code()` maps it forward to the franchise page.
+A franchise's three-letter code changes when it moves, and nflverse is not
+internally consistent about it: play-by-play, player and team stats and snap counts
+all write the *present-day* code into 1999 rows (LA, LAC, LV), while `games.csv` and
+the roster files write the code the team actually played under (STL, SD, OAK). Left
+alone, that mismatch silently drops three franchises out of every join touching a
+pre-relocation season.
+
+So the canonical key everywhere in this application is the **current** code, applied
+to every source as it loads. `code_in_season` and `label_in_season` exist only for
+display, where "the 1999 St. Louis Rams" is the honest thing to print.
 """
 
 from __future__ import annotations
@@ -140,11 +147,11 @@ def code_in_season(code: str, season: int) -> str:
 
 @lru_cache(maxsize=None)
 def alignment(season: int) -> dict[str, dict[str, tuple[str, ...]]]:
-    """{conference: {division: (team codes as used that season)}}."""
+    """{conference: {division: (canonical team codes)}} for one season."""
     era = _era_for(season)
     return {
         conference: {
-            division: tuple(code_in_season(team, season) for team in teams)
+            division: tuple(current_code(team) or team for team in teams)
             for division, teams in divisions.items()
         }
         for conference, divisions in era.items()
@@ -205,3 +212,38 @@ def alias_group(code: str) -> tuple[str, ...]:
     """Every code this franchise has used — for querying its whole history."""
     current = current_code(code) or code
     return FRANCHISE_ALIASES.get(current, (current,))
+
+
+# What a franchise was called while it played under an old code. Used for page
+# titles and year-by-year rows, never for keys.
+_HISTORICAL_NAMES: dict[str, str] = {
+    "STL": "St. Louis Rams",
+    "SD": "San Diego Chargers",
+    "OAK": "Oakland Raiders",
+}
+
+
+def label_in_season(code: str, season: int, current_name: str) -> str:
+    """The name this franchise went by in `season`.
+
+    Printing "2013 Los Angeles Rams" would be wrong in a way a reference site
+    does not get to be wrong, even though 2013 rows are keyed LA.
+    """
+    return _HISTORICAL_NAMES.get(code_in_season(code, season), current_name)
+
+
+def canonical_team_sql(column: str) -> str:
+    """A SQL expression mapping any historical code in `column` to the current one.
+
+    Generated from the alias table so the mapping lives in exactly one place.
+    """
+    cases = []
+    for current, aliases in FRANCHISE_ALIASES.items():
+        olds = ", ".join(f"'{a}'" for a in aliases if a != current)
+        if olds:
+            cases.append(f"WHEN {column} IN ({olds}) THEN '{current}'")
+    for wrong, right in _SPELLING_FIXES.items():
+        cases.append(f"WHEN {column} = '{wrong}' THEN '{right}'")
+    if not cases:
+        return column
+    return "CASE " + " ".join(cases) + f" ELSE {column} END"
