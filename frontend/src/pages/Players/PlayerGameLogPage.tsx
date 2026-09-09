@@ -119,7 +119,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
   if (!data.rows.length) {
     return (
       <p className="px-1 py-6 text-[13px] text-ink-3">
-        {data.note ?? 'No game in this range has a row for him in the weekly stats file.'}
+        {data.note ?? 'No game in this range has a row in the weekly stats file.'}
       </p>
     )
   }
@@ -245,7 +245,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
             id: 'offense_snaps',
             header: 'Snaps',
             align: 'right' as const,
-            help: 'Offensive snaps he played, from the snap-count file.',
+            help: 'Offensive snaps played, from the snap-count file.',
             sortValue: (row: Row) => row.offense_snaps ?? null,
             render: (row: Row) => <StatValue value={row.offense_snaps} unit="count" id="snaps" />,
           },
@@ -253,7 +253,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
             id: 'offense_pct',
             header: 'Snap %',
             align: 'right' as const,
-            help: "Share of his team's offensive snaps in that game.",
+            help: "Share of the team's offensive snaps in that game.",
             sortValue: (row: Row) => row.offense_pct ?? null,
             render: (row: Row) => <StatValue value={row.offense_pct} unit="percent" id="snap_pct" />,
           },
@@ -281,7 +281,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
             id: 'epa',
             header: 'EPA',
             align: 'right' as const,
-            help: 'Expected points added on the plays he was credited with, from the nflfastR model.',
+            help: 'Expected points added on the plays credited to this player, from the nflfastR model.',
             sortValue: (row: Row) => row.epa ?? null,
             render: (row: Row) => <StatValue value={row.epa} unit="epa" id="epa" />,
           },
@@ -297,7 +297,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
             id: 'success_rate',
             header: 'Success',
             align: 'right' as const,
-            help: 'Share of his plays with positive expected-points added.',
+            help: 'Share of plays with positive expected-points added.',
             sortValue: (row: Row) => row.success_rate ?? null,
             render: (row: Row) =>
               row.success_rate === null || row.success_rate === undefined ? (
@@ -342,7 +342,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
         rows={data.rows}
         columns={columns}
         rowKey={(row) => row.game_id ?? `${row.season}-${row.week}`}
-        emptyMessage="No game in this range has a row for him in the weekly stats file."
+        emptyMessage="No game in this range has a row in the weekly stats file."
         caption={<Captions data={data} hasSnaps={hasSnaps} />}
         onExport={(visible, sorted) =>
           downloadCsv(`gamelog-${gsisId}.csv`, visible, sorted, (row, column) => exportCell(row, column.id, fantasyKey))
@@ -362,7 +362,7 @@ function GameLog({ data, scoring, gsisId }: { data: PlayerGameLog; scoring: stri
             {`${data.splits_summary.home} home · ${data.splits_summary.away} away · `}
             {`${data.splits_summary.wins}-${data.splits_summary.losses}`}
             {data.splits_summary.ties ? `-${data.splits_summary.ties}` : ''}
-            {' in games he played'}
+            {' in games played'}
           </p>
           <p className="mt-1 text-[11px] leading-4 text-ink-3">
             Roof, surface, rest and opponent splits live on{' '}
@@ -471,7 +471,7 @@ function exportCell(row: Row, columnId: string, fantasyKey: keyof Row): string |
   }
 }
 
-/** The seasons he has weekly rows in, taken from his own coverage window. */
+/** The seasons with weekly rows, taken from this player's own coverage window. */
 function seasonRange(hub: ReturnType<typeof usePlayerHub>['data']): number[] {
   const window = hub?.coverage.find((entry) => entry.source === 'player_week')
   if (!window?.first_season || !window.last_season) return []

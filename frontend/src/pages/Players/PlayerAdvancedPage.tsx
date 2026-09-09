@@ -17,9 +17,9 @@ import { PlayerMiniHeader, SeasonPicker } from './blocks/PlayerHeader'
  * sources, each with the window it actually has *for this player*.
  *
  * The banner is generated from those per-player windows rather than from the
- * datasets' start years: telling a 2019 rookie that his Next Gen Stats run from
+ * datasets' start years: telling a 2019 rookie that their Next Gen Stats run from
  * 2016 is the exact failure this page exists to avoid. A source with no rows
- * for him has no section at all and is named in the banner instead.
+ * for a player has no section at all and is named in the banner instead.
  */
 
 const ALL = 'all'
@@ -115,12 +115,12 @@ const PRIMARY: Record<string, string[]> = {
 //: Only columns whose meaning is documented get one; the rest carry no popover
 //: rather than a guess.
 const HELP: Record<string, string> = {
-  avg_time_to_throw: 'Seconds from snap to release, averaged over his attempts.',
+  avg_time_to_throw: 'Seconds from snap to release, averaged over all attempts.',
   avg_completed_air_yards: 'Air yards on completions only, averaged.',
   avg_intended_air_yards: 'Air yards on all attempts, completed or not.',
   avg_air_yards_differential: 'Completed air yards minus intended air yards.',
   aggressiveness: 'Share of attempts thrown into tight coverage — a defender within one yard of the receiver.',
-  avg_air_yards_to_sticks: 'Air yards relative to the line to gain. Negative means he throws short of the sticks on average.',
+  avg_air_yards_to_sticks: 'Air yards relative to the line to gain. Negative means the average throw lands short of the sticks.',
   expected_completion_percentage: "The model's completion probability given depth, separation and pressure.",
   completion_percentage_above_expectation: 'Completion percentage minus the expected figure. CPOE.',
   avg_separation: 'Yards between receiver and nearest defender at the catch point.',
@@ -128,7 +128,7 @@ const HELP: Record<string, string> = {
   avg_yac_above_expectation: 'Yards after catch minus the model’s expectation for that catch.',
   efficiency: 'Distance travelled per yard gained downfield. Lower is more direct.',
   rush_yards_over_expected: 'Rushing yards minus the yards the model expected given the blocking and box.',
-  pressure_pct: 'Share of drop-backs where he was pressured.',
+  pressure_pct: 'Share of drop-backs under pressure.',
   pocket_time: 'Seconds held in the pocket, averaged.',
   bad_throw_pct: 'Share of throws charted as inaccurate, excluding throwaways and spikes.',
   on_tgt_pct: 'Share of throws charted as on target.',
@@ -136,8 +136,8 @@ const HELP: Record<string, string> = {
   times_blitzed: 'Drop-backs faced with five or more rushers.',
   qbr_total: 'ESPN Total QBR, 0–100, adjusted for down, distance and opponent.',
   pts_added: 'Points added over an average quarterback, on ESPN’s scale.',
-  epa_total: 'Expected points added across his plays, as ESPN measures it.',
-  qb_plays: 'Plays ESPN credits to him, including sacks, scrambles and penalties.',
+  epa_total: 'Expected points added across these plays, as ESPN measures it.',
+  qb_plays: 'Plays ESPN credits to this player, including sacks, scrambles and penalties.',
   week: 'The file\u2019s own week number. Week 0 is its season-total row, not a game.',
 }
 
@@ -162,7 +162,7 @@ export function PlayerAdvancedPage() {
         title="Advanced"
         meta={
           season === ALL
-            ? 'Every season these sources hold for him'
+            ? 'Every season these sources hold'
             : `Season ${season}`
         }
       />
@@ -207,7 +207,7 @@ function Advanced({ data }: { data: PlayerAdvanced }) {
       {nothing ? (
         <p className="px-1 py-6 text-[13px] text-ink-3">
           {data.note ??
-            'None of the advanced sources has a row for him in this scope. The windows above say which ones were tried.'}
+            'None of the advanced sources has a row for this player in this scope. The windows above say which ones were tried.'}
         </p>
       ) : null}
 
@@ -299,7 +299,7 @@ function BlockSection({
         // QBR ships one "Season Total" row per season type, so the index is part
         // of the key or React sees two rows with the same name.
         rowKey={(row, index) => `${String(row.season ?? '')}-${String(row.week ?? row.game_week ?? '')}-${index}`}
-        emptyMessage={`${block.name} holds no row for him in this scope.`}
+        emptyMessage={`${block.name} holds no row for this player in this scope.`}
         onExport={(visible, sorted) =>
           downloadCsv(`${block.source}.csv`, visible, sorted, (row, column) => {
             const value = row[column.id]
@@ -416,7 +416,7 @@ function SnapSection({ snaps }: { snaps: NonNullable<PlayerAdvanced['snaps']> })
         rows={snaps}
         columns={columns}
         rowKey={(row) => String(row.season)}
-        emptyMessage="No season of his has a snap-count row."
+        emptyMessage="No season on file has a snap-count row."
         caption={
           <>
             {snaps[0]?.share_note}

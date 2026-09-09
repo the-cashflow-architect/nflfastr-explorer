@@ -63,13 +63,23 @@ export function StandingsTable({
 function seedCell(row: StandingsTeamRow) {
   if (row.seed === null || row.seed === undefined) return <span className="text-ink-3">—</span>
   return (
-    <div>
-      <span>
-        {row.seed}
-        {row.projected ? <span className="ml-1 text-[10px] font-normal text-ink-3">proj.</span> : null}
-      </span>
-      {row.tiebreak_note ? <div className="text-[10px] font-normal leading-tight text-ink-3">{row.tiebreak_note}</div> : null}
-    </div>
+    <span className="whitespace-nowrap">
+      {row.seed}
+      {row.projected ? <span className="ml-1 text-[10px] font-normal text-ink-3">proj.</span> : null}
+      {/* A marker, not the sentence. The tiebreak note runs to a full line of
+          prose, and rendering it inside a column two characters wide wrapped it
+          into a 157px-tall row that pushed every neighbouring division apart.
+          The note itself is on hover, and the rules are stated under the table. */}
+      {row.tiebreak_note ? (
+        <span
+          title={row.tiebreak_note}
+          aria-label={row.tiebreak_note}
+          className="ml-0.5 cursor-help align-super text-[9px] font-normal text-ink-3"
+        >
+          †
+        </span>
+      ) : null}
+    </span>
   )
 }
 

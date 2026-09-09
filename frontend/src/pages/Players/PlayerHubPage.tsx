@@ -109,7 +109,7 @@ export function PlayerHubPage() {
           ) : null}
 
           <Section
-            title="How he compares"
+            title="How this compares"
             note={scope === CAREER ? 'Career, pooled across seasons' : `Season ${scope}`}
             controls={
               seasons.length ? (

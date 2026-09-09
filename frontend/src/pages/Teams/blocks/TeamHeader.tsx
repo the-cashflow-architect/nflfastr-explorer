@@ -1,4 +1,5 @@
 import { PageHeader } from '../../../components/ui/Page'
+import { Mark } from '../../../components/ui/Mark'
 
 /**
  * The identity header shared by the franchise hub, the team-season cockpit and
@@ -12,6 +13,7 @@ import { PageHeader } from '../../../components/ui/Page'
 
 interface HeaderTeam {
   name?: string | null
+  abbr?: string | null
   logo?: string | null
   colors: { primary?: string | null; secondary?: string | null }
 }
@@ -38,9 +40,7 @@ export function TeamHeader({
       <PageHeader
         title={title}
         mark={
-          team.logo ? (
-            <img src={team.logo} alt="" className="h-10 w-10 object-contain" width={40} height={40} />
-          ) : undefined
+          <Mark src={team.logo} label={team.abbr ?? team.name ?? '?'} size={40} />
         }
         meta={meta}
         action={action}

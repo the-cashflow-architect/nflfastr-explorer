@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { SeasonHub } from '../../../api/endpoints'
 import { TeamLink } from '../../../components/ui/EntityLink'
 import { num } from '../../../design/format'
+import { Mark } from '../../../components/ui/Mark'
 
 /**
  * A real seeded tree, wild card through the championship game — the block
@@ -236,7 +237,7 @@ function BracketTeamRow({ team, score, won }: { team: BracketTeam; score: number
   return (
     <div className="flex items-center justify-between gap-2 py-0.5">
       <span className="flex min-w-0 items-center gap-1.5">
-        {team.logo ? <img src={team.logo} alt="" className="h-4 w-4 shrink-0" /> : null}
+        <Mark src={team.logo} label={team.code_in_season ?? team.abbr ?? '?'} size={16} />
         <span className={`truncate text-[12px] ${won ? 'font-semibold text-ink' : 'text-ink-2'}`}>
           {team.seed ? <span className="text-ink-3">{team.seed} </span> : null}
           {team.code_in_season}
@@ -253,7 +254,7 @@ function ByeCard({ team, label, season }: { team: BracketTeam; label: string; se
       <p className="mb-1 text-[10px] uppercase tracking-[0.03em] text-ink-3">{label}</p>
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
-          {team.logo ? <img src={team.logo} alt="" className="h-4 w-4 shrink-0" /> : null}
+          <Mark src={team.logo} label={team.code_in_season ?? team.abbr ?? '?'} size={16} />
           <span className="truncate text-[12px] font-medium text-ink">
             {team.seed ? <span className="text-ink-3">{team.seed} </span> : null}
             <TeamLink abbr={team.abbr} season={season} className="no-underline hover:underline">

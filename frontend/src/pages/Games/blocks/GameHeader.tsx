@@ -3,6 +3,7 @@ import type { Game } from '../../../api/endpoints'
 import { ComputedByUs } from '../../../components/ui/Honesty'
 import { PageHeader } from '../../../components/ui/Page'
 import { gameDate, num, record as formatRecord, signed } from '../../../design/format'
+import { Mark } from '../../../components/ui/Mark'
 
 type Header = Game['header']
 type Side = Header['home']
@@ -102,9 +103,7 @@ function TeamCard({
         <div aria-hidden className="h-[3px] w-full" style={{ background: side.colors.primary }} />
       ) : null}
       <div className="flex items-center gap-3 px-3 py-2.5">
-        {side.logo ? (
-          <img src={side.logo} alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-        ) : null}
+        <Mark src={side.logo} label={side.abbr ?? '?'} size={32} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-medium leading-5">
             {side.href ? <Link to={side.href}>{side.name ?? side.abbr}</Link> : (side.name ?? side.abbr ?? '—')}

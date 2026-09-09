@@ -84,6 +84,11 @@ export function StandingsPage() {
                   {data.note}
                   {data.formulas.playoff_seed ? <ComputedByUs formula={data.formulas.playoff_seed} anchor="playoff-seed" /> : null}
                 </p>
+                <p>
+                  A <span className="align-super text-[9px]">†</span> beside a seed means our rules
+                  could not separate that club from another on record alone — hover it for what we
+                  could and could not settle.
+                </p>
                 <TiebreakRules rules={data.tiebreak_rules_implemented} />
                 <p>
                   SRS, SOS and Pythagorean wins are calculated by Gridiron, not sourced, and are hidden by default —

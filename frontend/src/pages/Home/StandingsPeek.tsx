@@ -42,7 +42,7 @@ export function StandingsPeek({ season, standings }: { season: number; standings
           aria-expanded={!collapsed}
           className="motion-state flex items-center gap-1 text-[12px] text-ink-2 hover:text-accent"
         >
-          {collapsed ? `Full standings · ${teamCount} teams` : 'Show leaders only'}
+          {collapsed ? `Show all ${teamCount}` : 'Show leaders only'}
           <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${collapsed ? '' : 'rotate-90'}`} />
         </button>
       </div>

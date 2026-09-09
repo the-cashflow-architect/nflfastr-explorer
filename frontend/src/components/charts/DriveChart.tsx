@@ -67,7 +67,7 @@ export function DriveChart({
                 onClick={() => onSelect?.(isSelected ? null : drive.drive)}
                 aria-pressed={isSelected}
                 title={`${drive.posteam} · ${drive.plays ?? '—'} plays · ${drive.result ?? 'unknown'}`}
-                className={`motion-state grid w-full grid-cols-[3.5rem_1fr_5.5rem] items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-row-hover ${
+                className={`motion-state grid w-full grid-cols-[3.5rem_1fr_8rem] items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-row-hover ${
                   isSelected ? 'bg-row-hover' : ''
                 }`}
               >

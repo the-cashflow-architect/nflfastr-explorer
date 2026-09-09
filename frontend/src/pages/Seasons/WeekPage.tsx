@@ -7,6 +7,15 @@ import { PageHeader, Section } from '../../components/ui/Page'
 import { QueryBoundary } from '../../components/ui/QueryBoundary'
 import { useCrumbLabel } from '../../components/shell/useCrumbLabel'
 import { num, signed } from '../../design/format'
+import { Mark } from '../../components/ui/Mark'
+
+/**
+ * A postseason week leaves most of the league idle, and listing thirty clubs as
+ * "on bye" describes a season that is over rather than a week off. Six is the
+ * most any real regular-season week produces.
+ */
+const MAX_BYES = 8
+
 
 export type WeekGame = WeekScoreboard['games'][number]
 type LeaderRow = NonNullable<NonNullable<WeekScoreboard['week_leaders']>['by_epa']>[number]
@@ -115,7 +124,7 @@ function WeekBody({ data, season }: { data: WeekScoreboard; season: number }) {
         ))}
       </div>
 
-      {data.bye_teams.length ? (
+      {data.bye_teams.length && data.bye_teams.length <= MAX_BYES ? (
         <p className="mt-3 text-[12px] leading-4 text-ink-3">Bye: {data.bye_teams.join(', ')}</p>
       ) : null}
       {data.note ? <p className="mt-2 text-[11px] leading-4 text-ink-3">{data.note}</p> : null}
@@ -234,7 +243,7 @@ function GameTeamRow({
   return (
     <div className="flex items-center justify-between gap-2 py-0.5">
       <span className="flex min-w-0 items-center gap-1.5">
-        {team.logo ? <img src={team.logo} alt="" className="h-4 w-4 shrink-0" /> : null}
+        <Mark src={team.logo} label={team.abbr ?? '?'} size={16} />
         <span className={`truncate text-[13px] ${won ? 'font-semibold text-ink' : 'text-ink-2'}`}>{team.abbr}</span>
       </span>
       <span className={`shrink-0 text-[13px] tabular-nums ${won ? 'font-semibold text-positive' : 'text-ink-3'}`}>

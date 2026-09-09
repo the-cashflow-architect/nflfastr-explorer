@@ -3,6 +3,7 @@ import { useTeamIndex, type TeamIndex } from '../../api/endpoints'
 import { PageHeader, Section } from '../../components/ui/Page'
 import { QueryBoundary } from '../../components/ui/QueryBoundary'
 import { ordinal, plural, record as formatRecord, winPct } from '../../design/format'
+import { Mark } from '../../components/ui/Mark'
 
 type Card = TeamIndex['conferences'][number]['divisions'][number]['teams'][number]
 
@@ -130,9 +131,7 @@ function TeamCard({ card, season }: { card: Card; season: number }) {
       )}
       <Link to={card.href} aria-label={`${season} ${name} season`} className="absolute inset-0 z-0" />
       <div className="flex min-w-0 items-center gap-2 px-2.5 py-2">
-        {card.logo ? (
-          <img src={card.logo} alt="" loading="lazy" width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />
-        ) : null}
+        <Mark src={card.logo} label={card.abbr ?? name} size={28} />
         <div className="min-w-0">
           <Link to={card.franchise_href} className="relative z-10 block truncate text-[13px] font-medium">
             {name}

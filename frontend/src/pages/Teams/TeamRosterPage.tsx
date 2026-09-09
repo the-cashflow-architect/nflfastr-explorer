@@ -26,8 +26,8 @@ const GROUP_LABEL: Record<string, string> = {
  * much of the season each player was actually on the field.
  *
  * The rule that matters here is what happens to a player whose snap record we
- * could not match. He is not ranked last — being unmatched is not the same as
- * never playing — so the snap order excludes him and lists him separately with
+ * could not match. Such a player is not ranked last — being unmatched is not the same as
+ * never playing — so the snap order excludes them and lists them separately with
  * the reason.
  */
 export function TeamRosterPage() {
@@ -256,7 +256,7 @@ function buildColumns({
       id: 'draft',
       header: 'Drafted by',
       sortValue: (row) => row.draft_club,
-      help: 'The club that drafted him, and his overall pick. Undrafted players carry neither.',
+      help: 'The club that drafted this player, and the overall pick. Undrafted players carry neither.',
       render: (row) =>
         row.draft_club ? (
           <span className="whitespace-nowrap">

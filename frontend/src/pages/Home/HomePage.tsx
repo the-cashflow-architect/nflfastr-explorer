@@ -13,7 +13,6 @@ import { Link } from 'react-router-dom'
 import { useCoverageQuery, useSeasonHub, useWeekScoreboard } from '../../api/endpoints'
 import { SearchPalette } from '../../components/search/SearchLauncher'
 import { QueryBoundary } from '../../components/ui/QueryBoundary'
-import { gameDate } from '../../design/format'
 import { StandingsPeek } from './StandingsPeek'
 import { WeekStrip } from './WeekStrip'
 
@@ -25,18 +24,10 @@ import { WeekStrip } from './WeekStrip'
  * level deeper.
  */
 
-/** The shape actually returned by /api/coverage (see docs' coverage.json sample). */
-interface CoverageData {
-  datasets: { loaded_at: string | null }[]
-  coverage_windows: Record<string, { first_season: number; note: string } | undefined>
-  latest_completed_season: number | null
-  latest_season_with_games: number | null
-  generated_at: string
-}
 
 export function HomePage() {
   const coverage = useCoverageQuery()
-  const cov = coverage.data as CoverageData | undefined
+  const cov = coverage.data
   const season = cov?.latest_completed_season ?? cov?.latest_season_with_games ?? null
 
   const seasonHub = useSeasonHub(season ?? undefined)
@@ -47,7 +38,7 @@ export function HomePage() {
   const latestWeekQuery = useWeekScoreboard(season ?? undefined, latestWeek)
 
   const chips = useMemo(
-    () => buildChips(latestWeekQuery.data, seasonHub.data?.standings, season),
+    () => buildChips(latestWeekQuery.data, seasonHub.data?.standings, season, seasonHub.data?.leaders),
     [latestWeekQuery.data, seasonHub.data, season],
   )
 
@@ -89,7 +80,6 @@ export function HomePage() {
 
       <EntryTiles />
 
-      <CoverageFootline coverage={cov} />
     </div>
   )
 }
@@ -139,12 +129,18 @@ function buildChips(
   week: ReturnType<typeof useWeekScoreboard>['data'],
   standings: NonNullable<ReturnType<typeof useSeasonHub>['data']>['standings'] | undefined,
   season: number | null,
+  leaders?: NonNullable<ReturnType<typeof useSeasonHub>['data']>['leaders'],
 ): Chip[] {
   const chips: Chip[] = []
 
-  const topPlayer = week?.week_leaders?.by_epa?.[0]
-  if (topPlayer?.gsis_id && topPlayer.player) {
-    chips.push({ key: 'player', label: topPlayer.player, to: `/players/${topPlayer.gsis_id}` })
+  // A season leader, not a single week's EPA leader. The latter is whoever had
+  // one good afternoon, and a home page that offers an unfamiliar name as its
+  // worked example teaches nothing about what the search box is for.
+  const seasonLeader = leaders?.passing?.[0] ?? leaders?.rushing?.[0] ?? leaders?.receiving?.[0]
+  const weekLeader = week?.week_leaders?.by_epa?.[0]
+  const player = seasonLeader?.gsis_id ? seasonLeader : weekLeader
+  if (player?.gsis_id && player.player) {
+    chips.push({ key: 'player', label: player.player, to: `/players/${player.gsis_id}` })
   }
 
   if (standings && season) {
@@ -205,26 +201,3 @@ function EntryTiles() {
   )
 }
 
-function CoverageFootline({ coverage }: { coverage: CoverageData | undefined }) {
-  if (!coverage) return null
-  const w = coverage.coverage_windows
-  const stats = w.stats?.first_season
-  const last = coverage.latest_completed_season
-  const parts: string[] = []
-  if (stats && last) parts.push(`Play-level data ${stats}–${last}`)
-  if (w.next_gen_stats?.first_season) parts.push(`Next Gen Stats ${w.next_gen_stats.first_season}+`)
-  if (w.snap_counts?.first_season) parts.push(`snap counts ${w.snap_counts.first_season}+`)
-  if (w.draft?.first_season) parts.push(`draft ${w.draft.first_season}+`)
-
-  return (
-    <p className="border-t border-line pt-3 text-[11px] leading-4 text-ink-3">
-      {parts.join(' · ')}
-      {parts.length ? ' · ' : ''}
-      last refreshed {gameDate(coverage.generated_at)}
-      {' — '}
-      <Link to="/about/data" className="no-underline hover:text-accent hover:underline">
-        what we have and don't
-      </Link>
-    </p>
-  )
-}

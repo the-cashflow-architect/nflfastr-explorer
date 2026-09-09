@@ -69,7 +69,7 @@ export function WinProbabilityChart({
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart
           data={data}
-          margin={{ top: 8, right: 4, bottom: 4, left: -18 }}
+          margin={{ top: 8, right: 8, bottom: 4, left: 4 }}
           onClick={(state: unknown) => {
             const payload = (state as { activePayload?: { payload?: { play_id?: number } }[] })
               ?.activePayload?.[0]?.payload
@@ -94,7 +94,9 @@ export function WinProbabilityChart({
             tick={{ fill: colors.ink3, fontSize: 10 }}
             axisLine={false}
             tickLine={false}
-            width={44}
+            // Wide enough for "100%" at 10px. A negative left margin used to pull
+            // the axis under the plot and clip every label to its last glyph.
+            width={40}
           />
           <ReferenceLine y={50} stroke={colors.line} strokeWidth={1} />
           <Area

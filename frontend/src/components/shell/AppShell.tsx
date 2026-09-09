@@ -3,6 +3,7 @@ import { Breadcrumb } from './Breadcrumb'
 import { ThemeToggle } from './ThemeToggle'
 import { SearchLauncher } from '../search/SearchLauncher'
 import { CoverageLine } from './CoverageLine'
+import { ErrorBoundary } from './ErrorBoundary'
 
 /**
  * The shell owns all the chrome. No page renders its own header, and no page
@@ -75,12 +76,17 @@ export function AppShell() {
 
       <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-4 sm:px-6">
         <Breadcrumb />
-        <Outlet />
+        {/* A page that throws shows a message; the shell and the nav survive. */}
+        <ErrorBoundary label="page">
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <footer className="mt-8 border-t border-line px-4 py-4 text-[11px] leading-4 text-ink-3 sm:px-6">
         <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-3 gap-y-1">
-          <CoverageLine />
+          <ErrorBoundary label="coverage">
+            <CoverageLine />
+          </ErrorBoundary>
           <a href="https://nflverse.com" target="_blank" rel="noreferrer" className="no-underline hover:underline">
             Data from nflverse
           </a>

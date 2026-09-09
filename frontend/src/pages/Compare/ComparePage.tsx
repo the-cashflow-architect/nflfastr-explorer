@@ -25,7 +25,7 @@ import { num, ordinal, percent } from '../../design/format'
  * The comparison is assembled from the same percentile endpoint the player hub
  * uses, so a number here and a number there cannot disagree. The cost of that is
  * printed rather than hidden: each player's percentile is measured inside *his
- * own* cohort — his position group, his scope — so the cohort line under every
+ * own* cohort — their position group, their scope — so the cohort line under every
  * player is part of the comparison, not decoration.
  */
 
@@ -425,7 +425,7 @@ function TableView({ entities, rows }: { entities: Entity[]; rows: { metric: Met
       columns={columns}
       rowKey={(row) => row.metric.id}
       emptyMessage="No shared metrics for these players in this scope."
-      caption="Value, then the player's percentile inside his own cohort."
+      caption="Value, then the percentile inside that player's own cohort."
     />
   )
 }
@@ -448,7 +448,7 @@ function CohortLegend({ entities }: { entities: Entity[] }) {
             {name} — {[cohort.position_group, cohort.season].filter(Boolean).join(', ')} ·{' '}
             {cohort.n.toLocaleString()} qualified · {cohort.qualification}
             {entity.percentiles?.in_cohort === false
-              ? ' He is below that bar, so his percentile is where he would fall, not a standing inside it.'
+              ? ' This player is below that bar, so the percentile is where they would fall, not a standing inside it.'
               : null}
           </li>
         )

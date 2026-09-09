@@ -106,7 +106,7 @@ function Splits({ data, gsisId, scope }: { data: PlayerSplits; gsisId: string; s
         <p className="mt-1 text-ink-2">{data.unavailable.why}</p>
         <p className="mt-2 text-[12px] text-ink-3">
           {`The three roles the play data names are ${data.unavailable.roles.join(', ')}. `}
-          His game-by-game record is on <Link to={`/players/${gsisId}/gamelog`}>the game log</Link>.
+          The game-by-game record is on <Link to={`/players/${gsisId}/gamelog`}>the game log</Link>.
         </p>
       </div>
     )
@@ -119,7 +119,7 @@ function Splits({ data, gsisId, scope }: { data: PlayerSplits; gsisId: string; s
   if (!situations.length && !context.length && !opponents.length) {
     return (
       <p className="px-1 py-6 text-[13px] text-ink-3">
-        {data.note ?? 'No play in this scope is credited to him, so there is nothing to split.'}
+        {data.note ?? 'No play in this scope is credited to this player, so there is nothing to split.'}
       </p>
     )
   }

@@ -32,8 +32,11 @@ export function PercentileBar({
 }) {
   const known = percentile !== null && percentile !== undefined && !Number.isNaN(percentile)
   return (
-    <div className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 py-1">
-      <span className="truncate text-[12px] text-ink-2" title={help}>
+    <div className="grid grid-cols-[minmax(0,13rem)_1fr_auto] items-center gap-3 py-1">
+      {/* Two lines rather than an ellipsis: "Completion percentage over expected"
+          truncates to the same prefix as "Completion percentage", and two rows
+          that read identically are worse than one row that wraps. */}
+      <span className="text-[12px] leading-4 text-ink-2" title={help}>
         {label}
       </span>
       <div className="relative h-2 rounded-full bg-track">

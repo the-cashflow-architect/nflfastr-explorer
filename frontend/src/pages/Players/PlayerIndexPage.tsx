@@ -17,7 +17,7 @@ import { StatValue } from './blocks/CareerTable'
  * The one thing this page must not do is print a zero where a player simply has
  * no row. Offensive linemen and long snappers have no season stat line at all;
  * the payload hands back a null headline with the sentence explaining why, and
- * that sentence is what the cell carries. A 0 there would read as "he gained no
+ * that sentence is what the cell carries. A 0 there would read as "gained no
  * yards", which is a different and false claim.
  */
 
@@ -142,7 +142,7 @@ function columns(data: PlayerIndex): Column<Row>[] {
       id: 'team',
       header: 'Team',
       width: '5rem',
-      help: 'The most recent franchise on file for him. Older codes are canonicalised, so a St. Louis Rams season reads LA.',
+      help: 'The most recent franchise on file. Older codes are canonicalised, so a St. Louis Rams season reads LA.',
       sortValue: (row) => row.latest_team,
       render: (row) => <TeamLink abbr={row.latest_team} />,
     },
@@ -350,7 +350,7 @@ function FilterRail({
               </option>
             ))}
           </Select>
-          <p className="mt-1 text-[11px] leading-4 text-ink-3">Matches any season he spent with that franchise.</p>
+          <p className="mt-1 text-[11px] leading-4 text-ink-3">Matches any season spent with that franchise.</p>
         </Field>
 
         <Field label="Status">

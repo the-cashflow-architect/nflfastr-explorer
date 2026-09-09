@@ -5,7 +5,7 @@ import { num, percent } from '../../../design/format'
 import { usePlayerPercentiles } from '../../../api/endpoints'
 
 /**
- * Where this player sits among his position's peers, for one season or for his
+ * Where this player sits among their position's peers, for one season or for their
  * whole career.
  *
  * The cohort is the block. A percentile with no cohort behind it is a number
@@ -35,7 +35,7 @@ function Bars({ data }: { data: NonNullable<ReturnType<typeof usePlayerPercentil
 
   return (
     <div>
-      {/* Below the volume bar he still has real values; they are shown with no
+      {/* Below the volume bar the values are still real; they are shown with no
           percentile beside them rather than dropped. */}
       {data.note ? <p className="mb-2 text-[12px] leading-4 text-ink-2">{data.note}</p> : null}
       {metrics.map((metric) => (
@@ -53,7 +53,7 @@ function Bars({ data }: { data: NonNullable<ReturnType<typeof usePlayerPercentil
         {data.cohort.qualification}
         {data.cohort.computed_by_us ? (
           <ComputedByUs
-            formula="Percentile of this player's value within the qualified cohort for his position group"
+            formula="Percentile of this player's value within the qualified cohort for their position group"
             anchor="percentiles"
           />
         ) : null}

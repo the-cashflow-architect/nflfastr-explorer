@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { search, type SearchHit } from '../../api/search'
+import { Mark } from '../ui/Mark'
 
 /**
  * One search for the whole product: a header button on desktop, and a palette on
@@ -181,11 +182,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
                         index === active ? 'bg-row-hover' : ''
                       }`}
                     >
-                      {hit.image ? (
-                        <img src={hit.image} alt="" className="h-6 w-6 rounded-full object-cover" />
-                      ) : (
-                        <span className="h-6 w-6" />
-                      )}
+                      <Mark src={hit.image} label={hit.title} size={24} rounded />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px]">{hit.title}</span>
                         {hit.subtitle ? (

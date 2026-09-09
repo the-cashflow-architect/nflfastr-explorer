@@ -1035,6 +1035,66 @@ export interface components {
             /** Snap Counts First Season */
             snap_counts_first_season: number;
         };
+        /** CoverageResponse */
+        CoverageResponse: {
+            /** Coverage Windows */
+            coverage_windows: {
+                [key: string]: components["schemas"]["CoverageWindow"];
+            };
+            /** Datasets */
+            datasets: components["schemas"]["DatasetCoverage"][];
+            /** Disk Usage Bytes */
+            disk_usage_bytes?: number | null;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Latest Completed Season */
+            latest_completed_season?: number | null;
+            /** Latest Season With Games */
+            latest_season_with_games?: number | null;
+            /** Not Building */
+            not_building: components["schemas"]["NotBuilding"][];
+        };
+        /**
+         * CoverageWindow
+         * @description One named boundary in the data, and why it is where it is.
+         */
+        CoverageWindow: {
+            /** First Season */
+            first_season: number;
+            /** Last Season */
+            last_season?: number | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** DatasetCoverage */
+        DatasetCoverage: {
+            /** Coverage Note */
+            coverage_note?: string | null;
+            /** Declared First Season */
+            declared_first_season?: number | null;
+            /** Declared Last Season */
+            declared_last_season?: number | null;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Loaded At */
+            loaded_at?: string | null;
+            /** Name */
+            name: string;
+            /** Row Count */
+            row_count?: number | null;
+            /** Season Max */
+            season_max?: number | null;
+            /** Season Min */
+            season_min?: number | null;
+            /** Source Url */
+            source_url?: string | null;
+            /** Status */
+            status: string;
+        };
         /** DivisionPanel */
         DivisionPanel: {
             /** Division */
@@ -1969,6 +2029,13 @@ export interface components {
             unit: string;
             /** Value */
             value?: number | null;
+        };
+        /** NotBuilding */
+        NotBuilding: {
+            /** What */
+            what: string;
+            /** Why */
+            why: string;
         };
         /** Official */
         Official: {
@@ -3679,9 +3746,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CoverageResponse"];
                 };
             };
         };

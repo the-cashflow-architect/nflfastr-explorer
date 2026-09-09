@@ -1871,6 +1871,239 @@
         "title": "Coverage",
         "type": "object"
       },
+      "CoverageResponse": {
+        "properties": {
+          "coverage_windows": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CoverageWindow"
+            },
+            "title": "Coverage Windows",
+            "type": "object"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetCoverage"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "disk_usage_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Usage Bytes"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "latest_completed_season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Completed Season"
+          },
+          "latest_season_with_games": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Season With Games"
+          },
+          "not_building": {
+            "items": {
+              "$ref": "#/components/schemas/NotBuilding"
+            },
+            "title": "Not Building",
+            "type": "array"
+          }
+        },
+        "required": [
+          "datasets",
+          "coverage_windows",
+          "not_building"
+        ],
+        "title": "CoverageResponse",
+        "type": "object"
+      },
+      "CoverageWindow": {
+        "description": "One named boundary in the data, and why it is where it is.",
+        "properties": {
+          "first_season": {
+            "title": "First Season",
+            "type": "integer"
+          },
+          "last_season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Season"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "first_season"
+        ],
+        "title": "CoverageWindow",
+        "type": "object"
+      },
+      "DatasetCoverage": {
+        "properties": {
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Note"
+          },
+          "declared_first_season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared First Season"
+          },
+          "declared_last_season": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Last Season"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "loaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "season_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Max"
+          },
+          "season_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Min"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "label",
+          "description",
+          "status"
+        ],
+        "title": "DatasetCoverage",
+        "type": "object"
+      },
       "DivisionPanel": {
         "properties": {
           "division": {
@@ -5804,6 +6037,24 @@
           "computed_by_us"
         ],
         "title": "MetricBar",
+        "type": "object"
+      },
+      "NotBuilding": {
+        "properties": {
+          "what": {
+            "title": "What",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "what",
+          "why"
+        ],
+        "title": "NotBuilding",
         "type": "object"
       },
       "Official": {
@@ -12612,9 +12863,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Coverage Api Coverage Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CoverageResponse"
                 }
               }
             },
