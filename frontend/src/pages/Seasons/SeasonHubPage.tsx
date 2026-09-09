@@ -11,6 +11,7 @@ import { num, signed } from '../../design/format'
 import { PlayoffBracket } from './blocks/PlayoffBracket'
 import { StandingsTable, type StandingsGroup } from './blocks/StandingsTable'
 import { WeekGameCard } from './WeekPage'
+import { byesWorthNaming } from '../../lib/byes'
 
 type Conference = 'AFC' | 'NFC'
 type LeaderCategory = keyof SeasonHub['leaders']
@@ -229,8 +230,8 @@ function SeasonHubBody({ data, season }: { data: SeasonHub; season: number }) {
                 </div>
               ))}
             </div>
-            {weekQuery.data?.bye_teams.length ? (
-              <p className="mt-2 text-[11px] text-ink-3">Bye: {weekQuery.data.bye_teams.join(', ')}</p>
+            {byesWorthNaming(weekQuery.data?.bye_teams).length ? (
+              <p className="mt-2 text-[11px] text-ink-3">Bye: {byesWorthNaming(weekQuery.data?.bye_teams).join(', ')}</p>
             ) : null}
           </QueryBoundary>
           {week ? (

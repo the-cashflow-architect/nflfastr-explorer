@@ -8,13 +8,8 @@ import { QueryBoundary } from '../../components/ui/QueryBoundary'
 import { useCrumbLabel } from '../../components/shell/useCrumbLabel'
 import { num, signed } from '../../design/format'
 import { Mark } from '../../components/ui/Mark'
+import { byesWorthNaming } from '../../lib/byes'
 
-/**
- * A postseason week leaves most of the league idle, and listing thirty clubs as
- * "on bye" describes a season that is over rather than a week off. Six is the
- * most any real regular-season week produces.
- */
-const MAX_BYES = 8
 
 
 export type WeekGame = WeekScoreboard['games'][number]
@@ -124,8 +119,8 @@ function WeekBody({ data, season }: { data: WeekScoreboard; season: number }) {
         ))}
       </div>
 
-      {data.bye_teams.length && data.bye_teams.length <= MAX_BYES ? (
-        <p className="mt-3 text-[12px] leading-4 text-ink-3">Bye: {data.bye_teams.join(', ')}</p>
+      {byesWorthNaming(data.bye_teams).length ? (
+        <p className="mt-3 text-[12px] leading-4 text-ink-3">Bye: {byesWorthNaming(data.bye_teams).join(', ')}</p>
       ) : null}
       {data.note ? <p className="mt-2 text-[11px] leading-4 text-ink-3">{data.note}</p> : null}
 

@@ -70,15 +70,27 @@ export function QuadrantScatter({
             onClick={(point) => onSelect?.((point as unknown as QuadrantPoint).team)}
             shape={(props: unknown) => {
               const { cx, cy, payload } = props as { cx: number; cy: number; payload: QuadrantPoint }
+              const cursor = onSelect ? 'pointer' : 'default'
+              // The abbreviation sits underneath and the logo covers it. A logo
+              // that fails — a stale nflverse URL, a blocked network — leaves the
+              // label rather than a broken-image glyph, and the chart still reads.
               return (
-                <image
-                  href={payload.logo}
-                  x={cx - 11}
-                  y={cy - 11}
-                  width={22}
-                  height={22}
-                  style={{ cursor: onSelect ? 'pointer' : 'default' }}
-                />
+                <g style={{ cursor }}>
+                  <text
+                    x={cx}
+                    y={cy}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={10}
+                    fontWeight={600}
+                    fill={colors.ink2}
+                  >
+                    {payload.team}
+                  </text>
+                  {payload.logo ? (
+                    <image href={payload.logo} x={cx - 11} y={cy - 11} width={22} height={22} />
+                  ) : null}
+                </g>
               )
             }}
           />

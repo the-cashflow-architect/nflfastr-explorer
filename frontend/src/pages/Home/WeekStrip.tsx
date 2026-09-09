@@ -6,13 +6,8 @@ import { GameLink } from '../../components/ui/EntityLink'
 import { QueryBoundary } from '../../components/ui/QueryBoundary'
 import { num } from '../../design/format'
 import { Mark } from '../../components/ui/Mark'
+import { byesWorthNaming } from '../../lib/byes'
 
-/**
- * A postseason week leaves most of the league idle, and listing thirty clubs as
- * "on bye" describes a season that is over rather than a week off. Six is the
- * most any real regular-season week produces.
- */
-const MAX_BYES = 8
 
 
 type WeekGame = WeekScoreboard['games'][number]
@@ -79,8 +74,8 @@ export function WeekStrip({ season, weeks }: { season: number; weeks: number[] }
         <div className="flex gap-2 overflow-x-auto pb-1">
           {data?.games.map((game) => <GameCard key={game.game_id} game={game} />)}
         </div>
-        {data?.bye_teams.length && data.bye_teams.length <= MAX_BYES ? (
-          <p className="mt-2 text-[11px] text-ink-3">Bye: {data.bye_teams.join(', ')}</p>
+        {byesWorthNaming(data?.bye_teams).length ? (
+          <p className="mt-2 text-[11px] text-ink-3">Bye: {byesWorthNaming(data?.bye_teams).join(', ')}</p>
         ) : null}
         {data?.note ? <p className="mt-2 text-[11px] text-ink-3">{data.note}</p> : null}
       </QueryBoundary>
