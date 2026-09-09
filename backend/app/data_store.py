@@ -1,27 +1,31 @@
+"""The Finder's backend: one generic query surface over tables the loader owns.
+
+Every endpoint under `/api/datasets` — schema, query, filter options, data
+quality, weekly breakdown, rankings, export — is served from here, and none of it
+loads anything. Each dataset is a view onto a table the registry-driven loader
+(`app/sources.py`, `app/loader.py`) already builds, canonicalised and season-
+tracked; this module asks the shared loader for it and reads it.
+
+It used to download its own copy of the same nflverse files into tables of its
+own, four seasons deep, beside the loader's twenty-seven. That is how the Finder
+came to print "2022-2025" on a site that covers 1999 onward: the one page whose
+job is to answer what the fixed pages cannot was the page that could not see a
+2003 season at all, and said nothing about it. Coverage is declared in the
+registry once; what this file reports is measured off the rows.
+"""
+
 from __future__ import annotations
 
 import json
-import logging
-import os
-import tempfile
 import threading
 from dataclasses import dataclass
 from typing import Any, Iterator
 
 import duckdb
-import requests
 
-from .config import (
-    DATA_MAX_AGE_HOURS,
-    DOWNLOAD_TIMEOUT,
-    DUCKDB_MEMORY_LIMIT,
-    DUCKDB_THREADS,
-    EXPORT_CHUNK_ROWS,
-    EXPORT_MAX_ROWS,
-    PBP_SEASONS,
-    PLAYER_SEASONS,
-    duckdb_path,
-)
+from . import sources
+from .config import EXPORT_CHUNK_ROWS, EXPORT_MAX_ROWS
+from .deps import get_loader
 from .filter_config import (
     DEFAULT_PBP_COLUMNS,
     DEFAULT_PBP_SORT,
@@ -58,162 +62,84 @@ from .query_builder import (
     quote_identifier,
 )
 
-logger = logging.getLogger(__name__)
 
-# nflreadpy's downloader buffers each file in memory, parses it into a polars
-# frame, and hands back every column; we then copy that into DuckDB. That is
-# three full copies of the data, and it cost ~518 MB for the weekly player
-# table alone — enough to take down a small instance. These are the same
-# nflverse release files, streamed to disk and read by DuckDB directly, which
-# measures at roughly zero resident cost.
-NFLVERSE_RELEASE = "https://github.com/nflverse/nflverse-data/releases/download"
-PBP_URL = f"{NFLVERSE_RELEASE}/pbp/play_by_play_{{season}}.parquet"
-PLAYER_WEEK_URL = f"{NFLVERSE_RELEASE}/stats_player/stats_player_week_{{season}}.parquet"
-PLAYER_REG_URL = f"{NFLVERSE_RELEASE}/stats_player/stats_player_reg_{{season}}.parquet"
-
-PBP_COLUMNS = [
-    "season",
-    "week",
-    "game_id",
-    "play_id",
-    "season_type",
-    "posteam",
-    "defteam",
-    "down",
-    "ydstogo",
-    "yardline_100",
-    "qtr",
-    "game_seconds_remaining",
-    "score_differential",
-    "play_type",
-    "pass",
-    "rush",
-    "desc",
-    "passer_player_name",
-    "receiver_player_name",
-    "rusher_player_name",
-    "yards_gained",
-    "air_yards",
-    "yards_after_catch",
-    "epa",
-    "wp",
-    "wpa",
-    "cpoe",
-    "touchdown",
-    "pass_touchdown",
-    "rush_touchdown",
-    "interception",
-    "complete_pass",
-    "sack",
-    "first_down",
-]
-
-
-@dataclass
+@dataclass(frozen=True)
 class DatasetConfig:
-    table: str
+    """One Finder mode: a registry source, plus how the Finder presents it."""
+
+    source_id: str
     name: str
     description: str
     source: str
     filters: list[FilterDef]
     default_columns: list[str]
     default_sort: list[SortSpec]
-    url_template: str
-    seasons: list[int]
-    # Restrict to these columns when the source file is much wider than what
-    # the app exposes. None keeps every column.
-    columns: list[str] | None = None
 
-    def urls(self) -> list[str]:
-        return [self.url_template.format(season=s) for s in self.seasons]
+    @property
+    def table(self) -> str:
+        # Read from the registry rather than repeated here. A table name written
+        # down in two places is a table that eventually disagrees with itself,
+        # which is the exact shape of the bug this module used to be.
+        return sources.get(self.source_id).table
 
 
 DATASETS: dict[str, DatasetConfig] = {
     "player_weekly": DatasetConfig(
-        table="player_weekly",
+        source_id="player_week",
         name="Weekly Player Stats",
         description="Player game-week statistics from nflfastR calculate_stats(), ideal for game logs and weekly leaders.",
         source="nflverse stats_player (summary_level=week)",
         filters=PLAYER_WEEKLY_FILTERS,
         default_columns=DEFAULT_PLAYER_WEEKLY_COLUMNS,
         default_sort=DEFAULT_PLAYER_WEEKLY_SORT,
-        url_template=PLAYER_WEEK_URL,
-        seasons=PLAYER_SEASONS,
     ),
     "player_season": DatasetConfig(
-        table="player_season",
+        source_id="player_season_reg",
         name="Season Player Stats",
         description="Regular-season aggregated player statistics — season totals and rates.",
         source="nflverse stats_player (summary_level=reg)",
         filters=PLAYER_SEASON_FILTERS,
         default_columns=DEFAULT_PLAYER_SEASON_COLUMNS,
         default_sort=DEFAULT_PLAYER_SEASON_SORT,
-        url_template=PLAYER_REG_URL,
-        seasons=PLAYER_SEASONS,
     ),
     "play_by_play": DatasetConfig(
-        table="play_by_play",
+        source_id="pbp",
         name="Play Explorer",
         description="Individual play-by-play rows from nflfastR — filter down to specific situations, players, and outcomes.",
-        source="nflverse pbp (recent seasons)",
+        # Play-by-play is the one table too large to hold whole: the loader keeps
+        # the recent seasons resident and materialises older ones per season on
+        # demand, which a whole-table query surface cannot reach. The window this
+        # dataset reports is read off the resident table, so it says so itself.
+        source="nflverse pbp (seasons held resident)",
         filters=PBP_FILTERS,
         default_columns=DEFAULT_PBP_COLUMNS,
         default_sort=DEFAULT_PBP_SORT,
-        url_template=PBP_URL,
-        seasons=PBP_SEASONS,
-        columns=PBP_COLUMNS,
     ),
 }
 
 
 class DataStore:
-    """Disk-backed DuckDB store with lazy, per-dataset loading.
+    """Query surface over the loader's tables.
 
     Two things matter for correctness here:
 
-    * FastAPI runs sync endpoints in a threadpool, so several requests can be
-      in this object at once. A DuckDB connection is not safe to share across
-      threads, so every query runs on its own ``conn.cursor()`` (a separate
-      connection to the same database).
-    * Loading is guarded by a per-dataset lock. Without it, two concurrent
-      first requests both pass the "not loaded" check and the second
-      ``CREATE TABLE`` fails.
+    * FastAPI runs sync endpoints in a threadpool, so several requests can be in
+      this object at once. A DuckDB connection is not safe to share across
+      threads, so every query runs on its own cursor (a separate connection to
+      the same database) from the shared loader.
+    * The per-table column list is read once and cached behind a lock, because
+      every request needs it and `DESCRIBE` is a round trip.
     """
 
-    LOAD_LOG = "_load_log"
-
-    def __init__(self, path: str | None = None, max_age_hours: int | None = None) -> None:
-        db_path = path or duckdb_path()
-        self.conn = duckdb.connect(db_path)
-        # Must be set before any bulk load: DuckDB's default limit is derived
-        # from host RAM, which on a container is not the memory we actually
-        # have. Spill to disk beside the database rather than failing.
-        self.conn.execute(f"SET memory_limit = '{DUCKDB_MEMORY_LIMIT}'")
-        self.conn.execute(f"SET threads = {max(1, DUCKDB_THREADS)}")
-        # Bulk loads buffer far less without it, and nothing here depends on
-        # table row order — every query sorts explicitly.
-        self.conn.execute("SET preserve_insertion_order = false")
-        self.conn.execute(
-            f"SET temp_directory = '{os.path.join(os.path.dirname(db_path) or '.', 'duckdb_tmp')}'"
-        )
-        self.max_age_hours = (
-            DATA_MAX_AGE_HOURS if max_age_hours is None else max_age_hours
-        )
-        self.conn.execute(
-            f"CREATE TABLE IF NOT EXISTS {self.LOAD_LOG} "
-            "(table_name VARCHAR PRIMARY KEY, loaded_at TIMESTAMP)"
-        )
+    def __init__(self) -> None:
         self._columns: dict[str, list[str]] = {}
         self._dtypes: dict[str, dict[str, str]] = {}
-        self._locks: dict[str, threading.Lock] = {
-            ds_id: threading.Lock() for ds_id in DATASETS
-        }
         self._state_lock = threading.Lock()
 
     # -- loading -----------------------------------------------------------
 
     def _cursor(self) -> duckdb.DuckDBPyConnection:
-        return self.conn.cursor()
+        return get_loader().cursor()
 
     def _run(self, cur: duckdb.DuckDBPyConnection, sql: str, params: list | None = None):
         """Execute user-driven SQL, translating "no such column" into a 400.
@@ -231,163 +157,27 @@ class DataStore:
         except duckdb.BinderException as exc:
             raise ValueError(f"Invalid field in request: {exc}") from exc
 
-    def _table_exists(self, cur: duckdb.DuckDBPyConnection, table: str) -> bool:
-        row = cur.execute(
-            "SELECT COUNT(*) FROM duckdb_tables() WHERE table_name = ?", [table]
-        ).fetchone()
-        return bool(row and row[0])
-
     def ensure_loaded(self, dataset_id: str) -> DatasetConfig:
-        """Make sure one dataset's table exists, downloading it if needed."""
+        """Make sure this dataset's table exists and is current.
+
+        Downloading, staging, freshness and per-season tracking all belong to the
+        loader; this delegation is the whole of the Finder's loading code.
+        """
         cfg = DATASETS[dataset_id]
+        get_loader().ensure(cfg.source_id)
 
         with self._state_lock:
             if cfg.table in self._columns:
                 return cfg
 
-        with self._locks[dataset_id]:
-            # Re-check: another thread may have loaded it while we waited.
-            with self._state_lock:
-                if cfg.table in self._columns:
-                    return cfg
-
-            cur = self._cursor()
-            exists = self._table_exists(cur, cfg.table)
-            if exists and self._is_fresh(cur, cfg.table):
-                # Left over from an earlier run — the whole point of the
-                # persisted database file. No download needed.
-                logger.info("Reusing persisted table %s", cfg.table)
-            else:
-                try:
-                    # Build into a staging table first: a network failure must
-                    # not destroy a stale-but-serviceable copy.
-                    staging = f"{cfg.table}__staging"
-                    cur.execute(f"DROP TABLE IF EXISTS {staging}")
-                    self._create_table(cur, dataset_id, staging)
-                except Exception:
-                    cur.execute(f"DROP TABLE IF EXISTS {cfg.table}__staging")
-                    if not exists:
-                        raise
-                    logger.exception(
-                        "Refresh of %s failed; serving the cached copy", cfg.table
-                    )
-                else:
-                    cur.execute(f"DROP TABLE IF EXISTS {cfg.table}")
-                    cur.execute(f"ALTER TABLE {staging} RENAME TO {cfg.table}")
-                    self._record_load(cur, cfg.table)
-                    logger.info("Loaded %s", cfg.table)
-
-            info = cur.execute(f"DESCRIBE {cfg.table}").fetchall()
-            with self._state_lock:
-                self._columns[cfg.table] = [row[0] for row in info]
-                self._dtypes[cfg.table] = {row[0]: row[1] for row in info}
-
+        info = self._cursor().execute(f"DESCRIBE {cfg.table}").fetchall()
+        with self._state_lock:
+            self._columns[cfg.table] = [row[0] for row in info]
+            self._dtypes[cfg.table] = {row[0]: row[1] for row in info}
         return cfg
 
-    def _is_fresh(self, cur: duckdb.DuckDBPyConnection, table: str) -> bool:
-        """Is the persisted copy young enough to serve?
-
-        Without an age check the database file would pin the app to whatever
-        nflverse published the first time it ever ran.
-        """
-        if self.max_age_hours <= 0:
-            return True
-        row = cur.execute(
-            f"SELECT loaded_at FROM {self.LOAD_LOG} WHERE table_name = ?", [table]
-        ).fetchone()
-        if not row or row[0] is None:
-            return False
-        age = cur.execute(
-            "SELECT date_diff('hour', ?, now()::TIMESTAMP)", [row[0]]
-        ).fetchone()[0]
-        return int(age) < self.max_age_hours
-
-    def _record_load(self, cur: duckdb.DuckDBPyConnection, table: str) -> None:
-        cur.execute(f"DELETE FROM {self.LOAD_LOG} WHERE table_name = ?", [table])
-        cur.execute(
-            f"INSERT INTO {self.LOAD_LOG} VALUES (?, now()::TIMESTAMP)", [table]
-        )
-
-    def _create_table(
-        self, cur: duckdb.DuckDBPyConnection, dataset_id: str, table: str
-    ) -> None:
-        """Materialise one dataset into `table` without buffering it in Python.
-
-        Each season's parquet is streamed to disk in fixed-size chunks, then
-        DuckDB reads the files directly. Column projection is pushed into the
-        parquet reader, so a table like play-by-play never materialises the
-        ~380 columns we don't expose.
-        """
-        cfg = DATASETS[dataset_id]
-        logger.info("Downloading %s for seasons %s", dataset_id, cfg.seasons)
-
-        paths: list[str] = []
-        try:
-            for url in cfg.urls():
-                paths.append(self._download_parquet(url))
-
-            select_sql = self._projection(cur, paths[0], cfg.columns)
-            files = ", ".join(f"'{p}'" for p in paths)
-            cur.execute(
-                f"CREATE TABLE {table} AS "
-                f"SELECT {select_sql} FROM read_parquet([{files}], union_by_name = true)"
-            )
-        finally:
-            for path in paths:
-                try:
-                    os.unlink(path)
-                except OSError:
-                    pass
-
-    def _projection(
-        self,
-        cur: duckdb.DuckDBPyConnection,
-        sample_path: str,
-        columns: list[str] | None,
-    ) -> str:
-        """Build the SELECT list, keeping only columns the files really have."""
-        if not columns:
-            return "*"
-        available = {
-            row[0]
-            for row in cur.execute(
-                f"DESCRIBE SELECT * FROM read_parquet('{sample_path}')"
-            ).fetchall()
-        }
-        keep = [c for c in columns if c in available]
-        if not keep:
-            raise ValueError("source parquet has none of the expected columns")
-        return ", ".join(f'"{c}"' for c in keep)
-
-    def _download_parquet(self, url: str) -> str:
-        """Stream a remote parquet to a temp file using constant memory."""
-        fd, path = tempfile.mkstemp(suffix=".parquet")
-        try:
-            with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as resp:
-                resp.raise_for_status()
-                with os.fdopen(fd, "wb") as handle:
-                    for chunk in resp.iter_content(chunk_size=1 << 20):
-                        if chunk:
-                            handle.write(chunk)
-        except BaseException:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
-            raise
-        return path
-
-    def preload(self) -> None:
-        """Load every dataset, one at a time so peak memory stays low."""
-        for dataset_id in DATASETS:
-            try:
-                self.ensure_loaded(dataset_id)
-            except Exception:
-                logger.exception("Preload failed for %s", dataset_id)
-
     def is_loaded(self, dataset_id: str) -> bool:
-        with self._state_lock:
-            return DATASETS[dataset_id].table in self._columns
+        return get_loader().table_exists(DATASETS[dataset_id].table)
 
     def _default_sort(
         self, cfg: DatasetConfig, columns: list[str]
@@ -423,15 +213,16 @@ class DataStore:
     # -- metadata ----------------------------------------------------------
 
     def list_datasets(self) -> list[dict[str, Any]]:
-        """Cheap listing: never triggers a download.
+        """The catalogue, reported from the tables as they actually are.
 
-        ``row_count`` is null until the dataset has been loaded, so the
-        catalogue renders immediately on a cold start.
+        Nothing here loads. A dataset whose table the loader has not built yet
+        reports nulls rather than a window it cannot stand behind.
         """
         cur = self._cursor()
         out = []
         for ds_id, cfg in DATASETS.items():
             loaded = self.is_loaded(ds_id)
+            first, last = self._season_window(cur, cfg.table) if loaded else (None, None)
             out.append(
                 {
                     "id": ds_id,
@@ -439,6 +230,8 @@ class DataStore:
                     "description": cfg.description,
                     "source": cfg.source,
                     "row_count": self._count(cur, cfg.table) if loaded else None,
+                    "season_min": first,
+                    "season_max": last,
                     "loaded": loaded,
                 }
             )
@@ -447,10 +240,28 @@ class DataStore:
     def _count(self, cur: duckdb.DuckDBPyConnection, table: str) -> int:
         return int(cur.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
+    def _season_window(
+        self, cur: duckdb.DuckDBPyConnection, table: str
+    ) -> tuple[int | None, int | None]:
+        """The seasons this table actually holds — measured, never declared.
+
+        The Finder prints this window verbatim under the mode selector, so it is
+        read off the rows. A declared window is a claim; this is a fact, and the
+        two used to differ by twenty-three seasons with only the claim on screen.
+        """
+        columns = {row[0] for row in cur.execute(f"DESCRIBE {table}").fetchall()}
+        if "season" not in columns:
+            return (None, None)
+        row = cur.execute(f"SELECT min(season), max(season) FROM {table}").fetchone()
+        if not row or row[0] is None:
+            return (None, None)
+        return (int(row[0]), int(row[1]))
+
     def get_schema(self, dataset_id: str) -> DatasetMeta:
         cfg = self.ensure_loaded(dataset_id)
         columns = self._columns_for(cfg.table)
         dtypes = self._dtypes[cfg.table]
+        cur = self._cursor()
 
         column_meta = []
         for col in columns:
@@ -461,13 +272,16 @@ class DataStore:
         available_filters = [
             f for f in cfg.filters if f.field in columns or f.type == "range"
         ]
+        season_min, season_max = self._season_window(cur, cfg.table)
 
         return DatasetMeta(
             id=dataset_id,
             name=cfg.name,
             description=cfg.description,
             source=cfg.source,
-            row_count=self._count(self._cursor(), cfg.table),
+            row_count=self._count(cur, cfg.table),
+            season_min=season_min,
+            season_max=season_max,
             columns=column_meta,
             filters=available_filters,
             default_columns=[c for c in cfg.default_columns if c in columns],

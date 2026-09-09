@@ -1,4 +1,9 @@
-"""API-level tests, including the CORS regression that broke production."""
+"""API-level tests: CORS, the dataset endpoints' contract, and their error codes.
+
+The dataset endpoints are the Finder's whole backend, so the tests that drive
+them run against `built_loader` — the same small real database the store tests
+use — through a `TestClient`. The CORS tests need no data and take none.
+"""
 
 from __future__ import annotations
 
@@ -6,34 +11,39 @@ import importlib
 import sys
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 PROD_ORIGIN = "https://nflfastr-explorer.onrender.com"
 
+#: The fixture's weekly player table: 24 rows each for 2001 and 2024.
+WEEKLY_ROWS = 48
+OLD_SEASON = 2001
 
-def build_client(monkeypatch, tmp_path, env: dict[str, str], store_factory=None):
-    for key in ("CORS_ORIGINS", "CORS_ORIGIN_REGEX", "PRELOAD_ON_STARTUP", "DUCKDB_PATH"):
+
+def build_client(monkeypatch, tmp_path, env: dict[str, str], with_data: bool = False):
+    for key in ("CORS_ORIGINS", "CORS_ORIGIN_REGEX", "DUCKDB_PATH"):
         monkeypatch.delenv(key, raising=False)
-    # Preloading would hit the network; every test drives loading explicitly.
-    monkeypatch.setenv("PRELOAD_ON_STARTUP", "false")
     monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "api.duckdb"))
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
-    # Only config and main are reloaded. Reloading app.data_store would swap
-    # in a fresh DataStore class and drop the fixture's no-network patch.
-    from app import config, main
+    from app import config, data_store, main
 
     importlib.reload(config)
     importlib.reload(main)
 
-    if store_factory is not None:
-        main.store = store_factory()
+    if with_data:
+        # A store of its own, so one test's column cache cannot answer for
+        # another test's database. It reads whatever loader `deps` points at,
+        # which under `built_loader` is the fixture one.
+        main.store = data_store.DataStore()
 
     return main, TestClient(main.app)
+
+
+# -- CORS --------------------------------------------------------------------
 
 
 def test_production_origin_is_allowed_when_configured(monkeypatch, tmp_path):
@@ -87,45 +97,62 @@ def test_trailing_slash_in_configured_origin_is_tolerated(monkeypatch, tmp_path)
     assert res.headers["access-control-allow-origin"] == PROD_ORIGIN
 
 
-def test_health_responds_without_loading_data(monkeypatch, tmp_path, store_factory):
-    """Health must never block on a multi-minute nflverse download."""
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
-    assert client.get("/api/health").json() == {"status": "ok"}
-    assert store_factory.calls == {}
+# -- the catalogue -----------------------------------------------------------
 
 
-def test_dataset_listing_is_cheap(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
-    res = client.get("/api/datasets")
+def test_dataset_listing_reports_the_real_window(monkeypatch, tmp_path, built_loader):
+    """`/api/datasets` is where the Finder's coverage line comes from."""
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
+    client.get("/api/datasets/player_weekly/schema")  # the mode the visitor picked
+
+    entry = {d["id"]: d for d in client.get("/api/datasets").json()}["player_weekly"]
+    assert entry["row_count"] == WEEKLY_ROWS
+    assert entry["season_min"] == OLD_SEASON
+    assert entry["season_max"] == 2024
+
+
+def test_schema_window_matches_the_rows_it_can_return(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
+    schema = client.get("/api/datasets/player_weekly/schema").json()
+    assert (schema["season_min"], schema["season_max"]) == (OLD_SEASON, 2024)
+
+    res = client.post(
+        "/api/datasets/player_weekly/query",
+        json={"filters": [{"field": "season", "operator": "eq", "value": OLD_SEASON}]},
+    )
     assert res.status_code == 200
-    assert store_factory.calls == {}
-    assert all(d["row_count"] is None for d in res.json())
+    body = res.json()
+    assert body["total"] > 0
+    assert {row["season"] for row in body["rows"]} == {OLD_SEASON}
 
 
-def test_export_is_capped_and_flags_truncation(monkeypatch, tmp_path, store_factory):
+# -- export ------------------------------------------------------------------
+
+
+def test_export_is_capped_and_flags_truncation(monkeypatch, tmp_path, built_loader):
     _, client = build_client(
-        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "10"}, store_factory
+        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "10"}, with_data=True
     )
     res = client.post("/api/datasets/player_weekly/export", json={"format": "csv"})
     assert res.status_code == 200
     assert res.headers["x-export-truncated"] == "true"
     assert res.headers["x-export-rows"] == "10"
-    assert res.headers["x-export-matching-rows"] == "60"
+    assert res.headers["x-export-matching-rows"] == str(WEEKLY_ROWS)
     assert len([line for line in res.text.splitlines() if line]) == 11
 
 
-def test_export_not_flagged_when_under_the_cap(monkeypatch, tmp_path, store_factory):
+def test_export_not_flagged_when_under_the_cap(monkeypatch, tmp_path, built_loader):
     _, client = build_client(
-        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "1000"}, store_factory
+        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "1000"}, with_data=True
     )
     res = client.post("/api/datasets/player_weekly/export", json={"format": "csv"})
     assert res.headers["x-export-truncated"] == "false"
-    assert res.headers["x-export-rows"] == "60"
+    assert res.headers["x-export-rows"] == str(WEEKLY_ROWS)
 
 
-def test_client_max_rows_cannot_exceed_server_cap(monkeypatch, tmp_path, store_factory):
+def test_client_max_rows_cannot_exceed_server_cap(monkeypatch, tmp_path, built_loader):
     _, client = build_client(
-        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "10"}, store_factory
+        monkeypatch, tmp_path, {"EXPORT_MAX_ROWS": "10"}, with_data=True
     )
     res = client.post(
         "/api/datasets/player_weekly/export",
@@ -134,31 +161,34 @@ def test_client_max_rows_cannot_exceed_server_cap(monkeypatch, tmp_path, store_f
     assert res.headers["x-export-rows"] == "10"
 
 
-def test_export_rejects_bad_column_before_streaming(monkeypatch, tmp_path, store_factory):
+def test_export_rejects_bad_column_before_streaming(monkeypatch, tmp_path, built_loader):
     """A binder error must be a 400, not a truncated half-written download."""
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/export",
-        json={"sort": [{"field": "nope; DROP TABLE player_weekly", "direction": "asc"}]},
+        json={"sort": [{"field": "nope; DROP TABLE player_week", "direction": "asc"}]},
     )
     assert res.status_code == 400
 
 
-def test_unknown_dataset_is_404(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+# -- error codes -------------------------------------------------------------
+
+
+def test_unknown_dataset_is_404(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     assert client.get("/api/datasets/nope/schema").status_code == 404
     assert client.post("/api/datasets/nope/query", json={}).status_code == 404
     assert client.post("/api/datasets/nope/export", json={}).status_code == 404
 
 
-def test_unknown_filter_field_is_400_not_500(monkeypatch, tmp_path, store_factory):
+def test_unknown_filter_field_is_400_not_500(monkeypatch, tmp_path, built_loader):
     """A stale filter naming a column the target table lacks must not 500.
 
     This is exactly what happened switching the frontend's player_season
     view from weekly granularity: the season table has no "week" column,
     and DuckDB's BinderException was propagating as an unhandled 500.
     """
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/query",
         json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
@@ -166,8 +196,8 @@ def test_unknown_filter_field_is_400_not_500(monkeypatch, tmp_path, store_factor
     assert res.status_code == 400
 
 
-def test_unknown_sort_field_is_400_not_500(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+def test_unknown_sort_field_is_400_not_500(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/query",
         json={"sort": [{"field": "not_a_real_column", "direction": "desc"}]},
@@ -175,8 +205,8 @@ def test_unknown_sort_field_is_400_not_500(monkeypatch, tmp_path, store_factory)
     assert res.status_code == 400
 
 
-def test_unknown_field_in_data_quality_is_400(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+def test_unknown_field_in_data_quality_is_400(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/data-quality",
         json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
@@ -184,8 +214,8 @@ def test_unknown_field_in_data_quality_is_400(monkeypatch, tmp_path, store_facto
     assert res.status_code == 400
 
 
-def test_unknown_field_in_export_is_400(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+def test_unknown_field_in_export_is_400(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/export",
         json={"filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},
@@ -193,8 +223,8 @@ def test_unknown_field_in_export_is_400(monkeypatch, tmp_path, store_factory):
     assert res.status_code == 400
 
 
-def test_unknown_field_in_filter_options_is_400(monkeypatch, tmp_path, store_factory):
-    _, client = build_client(monkeypatch, tmp_path, {}, store_factory)
+def test_unknown_field_in_filter_options_is_400(monkeypatch, tmp_path, built_loader):
+    _, client = build_client(monkeypatch, tmp_path, {}, with_data=True)
     res = client.post(
         "/api/datasets/player_weekly/filter-options",
         json={"field": "team", "filters": [{"field": "not_a_real_column", "operator": "eq", "value": 1}]},

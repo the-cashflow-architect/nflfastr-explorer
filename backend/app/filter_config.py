@@ -196,6 +196,12 @@ def _for_season(f: FilterDef) -> FilterDef:
     # player_season has no per-game opponent, and its team column is named
     # "recent_team" (a player can change teams mid-season) rather than
     # "team" — remap so the same filter id still points at a real column.
+    #
+    # The loader also copies that column to "team" as an alias, so filtering on
+    # either name works. We keep pointing at "recent_team" because it is the
+    # name whose glossary entry carries the caveat — for a player traded
+    # mid-season this is his *last* team, not the one he played each game for —
+    # and a filter labelled "Team" that silently means that deserves to show it.
     if f.id == "team":
         return FilterDef(**{**f.model_dump(), "field": "recent_team"})
     return f

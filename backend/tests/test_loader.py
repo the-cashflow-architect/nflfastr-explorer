@@ -200,3 +200,21 @@ def test_404_for_an_unpublished_season_is_skipped_not_raised(built_loader):
     built_loader.ensure("snap_counts")  # must not raise
     assert not built_loader.table_exists("snap_counts")
     assert built_loader.row_count("snap_counts") is None
+
+
+# -- the connection the whole app queries through ---------------------------
+
+
+def test_duckdb_memory_limit_is_pinned(built_loader):
+    """DuckDB defaults to a share of host RAM, which a container does not have.
+
+    Every reader in the app — the Finder's store included — takes its cursor
+    from this one connection, so this is where the setting has to hold.
+    """
+    cur = built_loader.cursor()
+    limit = cur.execute("SELECT current_setting('memory_limit')").fetchone()[0]
+    assert limit not in (None, "")
+    # Must be well under a small instance; the default would be GB-scale.
+    assert "GB" not in limit.upper() or float(limit.upper().split("GB")[0]) <= 1
+    order = cur.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]
+    assert order is False or str(order).lower() == "false"

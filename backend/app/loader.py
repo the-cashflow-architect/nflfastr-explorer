@@ -59,9 +59,9 @@ from .sources import Source
 
 logger = logging.getLogger(__name__)
 
-# Distinct from the legacy `_load_log` the old three-dataset store writes: that
-# table has a different shape, and `CREATE TABLE IF NOT EXISTS` would silently
-# adopt it while the two coexist.
+# Distinct from `_load_log`, which a database built before the Finder moved onto
+# these tables still carries: that table has a different shape, and
+# `CREATE TABLE IF NOT EXISTS` would silently adopt it. Nothing writes it now.
 LOAD_LOG = "_source_log"
 
 

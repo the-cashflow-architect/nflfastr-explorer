@@ -80,13 +80,21 @@ def write_games_csv(path: str, seasons=(2001, 2024)) -> str:
     return _write(con, sql, path)
 
 
-def write_player_week(path: str, season: int, teams=None) -> str:
+def write_player_week(
+    path: str, season: int, teams=None, team_column: str = "team"
+) -> str:
     """Weekly player rows in the present-day code dialect, with a null-team row.
 
     Present-day codes in *every* season, 2001 included, because that is what the
     real file does: stats_player_week_1999 says LA, LAC and LV and never STL, SD
     or OAK. Picking the period codes here would have the fixture agree with
     `games.csv` and quietly stop testing the canonicalisation that makes them join.
+
+    `team_column` exists because the two player files disagree about the name:
+    the weekly file writes `team`, the season files write `recent_team` and have
+    no `team` at all until the loader adds it as an alias. A fixture that wrote
+    `team` into both would agree with itself and stop testing the alias — and it
+    is the season file's name that the Finder's filters have to get right.
     """
     con = duckdb.connect()
     teams = teams or TEAMS_2024
@@ -104,7 +112,7 @@ def write_player_week(path: str, season: int, teams=None) -> str:
           'Player ' || (i % 6) AS player_display_name,
           ['QB','RB','WR','TE','CB'][(i % 5) + 1] AS position,
           ['QB','RB','WR','TE','DB'][(i % 5) + 1] AS position_group,
-          [{team_list}][(i % {len(teams)}) + 1] AS team,
+          [{team_list}][(i % {len(teams)}) + 1] AS {team_column},
           [{team_list}][((i + 1) % {len(teams)}) + 1] AS opponent_team,
           (200 + i * 3)::DOUBLE AS passing_yards,
           (i % 4)::DOUBLE AS passing_tds,
