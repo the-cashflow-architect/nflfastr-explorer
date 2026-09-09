@@ -552,3 +552,33 @@ def test_every_endpoint_declares_a_response_model(built_loader):
     assert len(paths) == 4
     for path, route in paths.items():
         assert route.response_model is not None, path
+
+
+def test_a_relocated_franchise_uses_its_present_day_name(built_loader, monkeypatch):
+    """`/teams/LA` is the Rams today, not the club they were in 2013.
+
+    `teams_colors_logos.csv` ships the pre-relocation rows too — STL, SD, OAK —
+    and they canonicalise onto the same franchise as LA, LAC and LV. Taking
+    whichever the file lists last picks the old one, and the franchise page then
+    introduces itself in the present tense under a name the club has not used
+    for a decade. The historical name is still correct *with a season attached*,
+    which is what `label_in_season` is for.
+    """
+    cur = built_loader.cursor()
+    built_loader.ensure("teams_meta")
+    # Both rows, in the order the real file lists them: current first, historical
+    # second, so a last-write-wins merge would take the wrong one.
+    cur.execute(
+        """
+        INSERT INTO teams_meta (team_abbr, team_name, team_nick, team_conf,
+                                team_division, team_color, team_color2,
+                                team_logo_espn, team_logo_squared, team_wordmark)
+        VALUES ('LA', 'Los Angeles Rams', 'Rams', 'NFC', 'NFC West', '#003594',
+                '#FFA300', 'logo', 'sq', 'wm'),
+               ('STL', 'St. Louis Rams', 'Rams', 'NFC', 'NFC West', '#003594',
+                '#FFA300', 'logo', 'sq', 'wm')
+        """
+    )
+    branding = repo._branding(built_loader)
+    assert branding["LA"]["name"] == "Los Angeles Rams"
+    assert "STL" not in branding

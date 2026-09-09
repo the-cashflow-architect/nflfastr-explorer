@@ -152,6 +152,16 @@ def _branding(loader: Any) -> dict[str, dict[str, Any]]:
         code = alignment.current_code(abbr)
         if code is None:
             continue
+        # The file carries the pre-relocation clubs too — STL alongside LA, SD
+        # alongside LAC, OAK alongside LV — and they collapse onto the same
+        # franchise. Last write wins would take whichever the file lists later,
+        # which is alphabetically the old one, and the Rams' franchise page then
+        # calls itself "St. Louis Rams" in the present tense. A row whose own
+        # abbreviation is already the current code always wins; the historical
+        # names live in `alignment.label_in_season`, where a season provides the
+        # context that makes them right.
+        if code in out and abbr != code:
+            continue
         out[code] = {
             "name": name,
             "nick": nick,
