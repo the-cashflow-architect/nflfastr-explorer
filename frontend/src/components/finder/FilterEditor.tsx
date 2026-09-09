@@ -41,23 +41,21 @@ export function MultiSelectEditor({ datasetId, def, value, siblingFilters, onCha
               key={String(option)}
               type="button"
               onClick={() => toggle(option)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
-                active
-                  ? 'bg-blue-500/20 text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40'
-                  : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
+              className={`motion-state rounded border px-2 py-0.5 text-[12px] ${
+                active ? 'border-line-strong text-ink' : 'border-line text-ink-3 hover:text-ink'
               }`}
             >
               {String(option)}
             </button>
           )
         })}
-        {isLoading ? <span className="text-xs text-slate-500">Loading…</span> : null}
+        {isLoading ? <span className="text-[12px] text-ink-3">Loading…</span> : null}
         {!isLoading && data?.options.length === 0 ? (
-          <span className="text-xs text-slate-500">No options for the current filters.</span>
+          <span className="text-[12px] text-ink-3">No values are left once the other conditions apply.</span>
         ) : null}
       </div>
       {selected.length > 0 ? (
-        <button type="button" onClick={() => onChange([])} className="text-[11px] text-slate-500 hover:text-slate-300">
+        <button type="button" onClick={() => onChange([])} className="motion-state text-[11px] text-ink-3 hover:text-ink">
           Clear {selected.length} selected
         </button>
       ) : null}
@@ -84,13 +82,13 @@ export function SearchEditor({ datasetId, def, value, siblingFilters, onChange }
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-ink-3" />
         <input
           autoFocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={`Search ${def.label.toLowerCase()}…`}
-          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white py-2 pl-9 pr-3 text-sm text-slate-100 light:text-slate-800 outline-none ring-blue-500/0 transition focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-md border border-line bg-page py-1.5 pl-9 pr-3 text-[13px] outline-none focus:border-line-strong"
         />
       </div>
       {data?.options?.length ? (
@@ -103,7 +101,7 @@ export function SearchEditor({ datasetId, def, value, siblingFilters, onChange }
                 setSearch(String(option))
                 onChange(String(option))
               }}
-              className="rounded-md bg-slate-800/80 light:bg-slate-100 px-2 py-1 text-xs text-slate-300 light:text-slate-600 hover:bg-slate-700"
+              className="motion-state rounded border border-line px-2 py-0.5 text-[12px] text-ink-3 hover:text-ink"
             >
               {String(option)}
             </button>
@@ -120,24 +118,24 @@ export function RangeEditor({ value, onChange }: Omit<EditorProps, 'datasetId' |
   return (
     <div className="grid grid-cols-2 gap-2">
       <label className="space-y-1">
-        <span className="text-[11px] text-slate-500">At least</span>
+        <span className="text-[11px] text-ink-3">At least</span>
         <input
           type="number"
           autoFocus
           placeholder="Min"
           value={range.min ?? ''}
           onChange={(e) => onChange({ ...range, min: e.target.value === '' ? null : Number(e.target.value) })}
-          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-md border border-line bg-page px-2 py-1.5 text-[13px] outline-none focus:border-line-strong"
         />
       </label>
       <label className="space-y-1">
-        <span className="text-[11px] text-slate-500">At most</span>
+        <span className="text-[11px] text-ink-3">At most</span>
         <input
           type="number"
           placeholder="Max"
           value={range.max ?? ''}
           onChange={(e) => onChange({ ...range, max: e.target.value === '' ? null : Number(e.target.value) })}
-          className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-900/70 light:bg-white px-3 py-2 text-sm outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-md border border-line bg-page px-2 py-1.5 text-[13px] outline-none focus:border-line-strong"
         />
       </label>
     </div>
@@ -150,8 +148,8 @@ export function BooleanEditor({ value, onChange }: Omit<EditorProps, 'datasetId'
       <button
         type="button"
         onClick={() => onChange(true)}
-        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-          value === true ? 'bg-emerald-500/20 text-emerald-200 light:text-emerald-700 ring-1 ring-emerald-400/40' : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
+        className={`motion-state flex-1 rounded-md border px-3 py-1.5 text-[13px] ${
+          value === true ? 'border-line-strong text-ink' : 'border-line text-ink-3 hover:text-ink'
         }`}
       >
         Yes
@@ -159,8 +157,8 @@ export function BooleanEditor({ value, onChange }: Omit<EditorProps, 'datasetId'
       <button
         type="button"
         onClick={() => onChange(false)}
-        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-          value === false ? 'bg-red-500/20 text-red-200 ring-1 ring-red-400/40' : 'bg-slate-800/80 light:bg-slate-100 text-slate-300 light:text-slate-600 ring-1 ring-white/5 light:ring-slate-200 hover:bg-slate-700/80'
+        className={`motion-state flex-1 rounded-md border px-3 py-1.5 text-[13px] ${
+          value === false ? 'border-line-strong text-ink' : 'border-line text-ink-3 hover:text-ink'
         }`}
       >
         No

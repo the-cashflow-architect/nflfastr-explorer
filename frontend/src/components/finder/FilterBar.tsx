@@ -97,13 +97,13 @@ export function FilterBar({ datasetId, allDefs, activeFilters, onChange, quickSu
 
       {availableSuggestions.length > 0 ? (
         <>
-          <div className="mx-1 h-4 w-px bg-white/10" />
+          <div className="mx-1 h-4 w-px bg-line" />
           {availableSuggestions.map((s) => (
             <button
               key={s.label}
               type="button"
               onClick={() => applySuggestion(s)}
-              className="rounded-full border border-dashed border-white/15 px-3 py-1.5 text-xs font-medium text-slate-400 light:text-slate-500 transition hover:border-blue-400/40 hover:text-blue-200"
+              className="motion-state rounded-md border border-dashed border-line px-2.5 py-1 text-[12px] text-ink-3 hover:border-line-strong hover:text-ink"
             >
               + {s.label}
             </button>
@@ -115,7 +115,7 @@ export function FilterBar({ datasetId, allDefs, activeFilters, onChange, quickSu
         <button
           type="button"
           onClick={() => onChange(activeFilters.filter((f) => !managedIds.has(f.def.id)))}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 transition hover:text-white"
+          className="motion-state inline-flex items-center gap-1 rounded px-1.5 py-1 text-[12px] text-ink-3 hover:text-ink"
         >
           <RotateCcw className="h-3 w-3" />
           Clear all
@@ -149,7 +149,7 @@ function FilterChip({
 
   return (
     <div className="relative">
-      <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 py-1 pl-3 pr-1.5 text-xs font-medium text-blue-100 light:text-blue-700 ring-1 ring-blue-400/30">
+      <span className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-raised py-1 pl-2.5 pr-1.5 text-[12px]">
         <button
           type="button"
           onClick={() => {
@@ -157,14 +157,14 @@ function FilterChip({
             if (open) onClose()
             else onOpen()
           }}
-          className="hover:text-white"
+          className="motion-state hover:text-accent"
         >
           {def.label}: {formatFilterValue(def, value)}
         </button>
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-full p-0.5 text-blue-300 light:text-blue-600 hover:bg-white/10 hover:text-white"
+          className="motion-state rounded p-0.5 text-ink-3 hover:text-ink"
           aria-label={`Remove ${def.label} filter`}
         >
           <X className="h-3 w-3" />
@@ -174,9 +174,9 @@ function FilterChip({
       {open ? (
         <>
           <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={onClose} />
-          <div className="absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div className="absolute left-0 z-50 mt-2 w-72 rounded-md border border-line bg-raised p-3 shadow-lg">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-200 light:text-slate-700">{def.label}</p>
+              <p className="text-[13px] font-medium">{def.label}</p>
               {def.description ? <HelpHint text={def.description} /> : null}
             </div>
             <FilterValueEditor
@@ -189,7 +189,7 @@ function FilterChip({
             <button
               type="button"
               onClick={() => onApply(draft)}
-              className="mt-3 w-full rounded-lg bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40 hover:bg-blue-500/30"
+              className="motion-state mt-3 w-full rounded-md border border-line px-3 py-1.5 text-[13px] hover:border-line-strong"
             >
               Apply
             </button>
@@ -246,7 +246,7 @@ function AddFilterControl({
       <button
         type="button"
         onClick={() => (open ? close() : onOpenChange(true))}
-        className="inline-flex items-center gap-1 rounded-full border border-dashed border-white/20 light:border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-300 light:text-slate-600 transition hover:border-blue-400/40 hover:text-blue-200"
+        className="motion-state inline-flex items-center gap-1 rounded-md border border-dashed border-line px-2.5 py-1 text-[12px] text-ink-2 hover:border-line-strong hover:text-ink"
       >
         <Plus className="h-3.5 w-3.5" />
         Add filter
@@ -255,21 +255,21 @@ function AddFilterControl({
       {open ? (
         <>
           <button type="button" className="fixed inset-0 z-40" aria-label="Close" onClick={close} />
-          <div className="absolute left-0 z-50 mt-2 w-80 max-h-[26rem] overflow-y-auto rounded-2xl border border-white/10 light:border-slate-200 bg-slate-900/95 light:bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+          <div className="absolute left-0 z-50 mt-2 max-h-[26rem] w-80 overflow-y-auto rounded-md border border-line bg-raised p-3 shadow-lg">
             {!pickedDef ? (
               <>
                 <div className="relative mb-3">
-                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-ink-3" />
                   <input
                     autoFocus
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search filters…"
-                    className="w-full rounded-lg border border-white/10 light:border-slate-200 bg-slate-950/60 light:bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-100 light:text-slate-800 outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-md border border-line bg-page py-1.5 pl-9 pr-3 text-[13px] outline-none focus:border-line-strong"
                   />
                 </div>
                 {grouped.length === 0 ? (
-                  <p className="flex items-center gap-2 px-1 py-6 text-center text-sm text-slate-500">
+                  <p className="flex items-center gap-2 px-1 py-6 text-[13px] text-ink-3">
                     <ListFilter className="h-4 w-4" />
                     No matching filters
                   </p>
@@ -277,7 +277,7 @@ function AddFilterControl({
                   <div className="space-y-3">
                     {grouped.map(([category, defs]) => (
                       <div key={category}>
-                        <p className="mb-1 text-[11px] font-medium uppercase text-slate-500">
+                        <p className="mb-1 text-[11px] uppercase tracking-[0.04em] text-ink-3">
                           {FILTER_CATEGORIES[category] ?? category}
                         </p>
                         <div className="space-y-0.5">
@@ -289,7 +289,7 @@ function AddFilterControl({
                                 setPickedDef(d)
                                 setDraft(d.type === 'multi_select' || d.type === 'single_select' ? [] : null)
                               }}
-                              className="block w-full rounded-lg px-2 py-1.5 text-left text-sm text-slate-200 light:text-slate-700 hover:bg-white/5"
+                              className="motion-state block w-full rounded px-2 py-1.5 text-left text-[13px] hover:bg-row-hover"
                             >
                               {d.label}
                             </button>
@@ -306,15 +306,15 @@ function AddFilterControl({
                   <button
                     type="button"
                     onClick={() => setPickedDef(null)}
-                    className="rounded p-1 text-slate-400 light:text-slate-500 hover:bg-white/5 hover:text-white"
+                    className="motion-state rounded p-1 text-ink-3 hover:text-ink"
                     aria-label="Back"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <p className="text-sm font-medium text-slate-200 light:text-slate-700">{pickedDef.label}</p>
+                  <p className="text-[13px] font-medium">{pickedDef.label}</p>
                 </div>
                 {pickedDef.description ? (
-                  <p className="mb-2 text-[11px] leading-snug text-slate-500">{pickedDef.description}</p>
+                  <p className="mb-2 text-[11px] leading-4 text-ink-3">{pickedDef.description}</p>
                 ) : null}
                 <FilterValueEditor
                   datasetId={datasetId}
@@ -330,7 +330,7 @@ function AddFilterControl({
                     onAdd(pickedDef, draft)
                     close()
                   }}
-                  className="mt-3 w-full rounded-lg bg-blue-500/20 px-3 py-1.5 text-sm font-medium text-blue-200 light:text-blue-700 ring-1 ring-blue-400/40 hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="motion-state mt-3 w-full rounded-md border border-line px-3 py-1.5 text-[13px] hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Add filter
                 </button>
