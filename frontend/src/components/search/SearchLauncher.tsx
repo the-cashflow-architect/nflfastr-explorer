@@ -3,7 +3,7 @@ import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { search, type SearchHit } from '../../api/search'
+import { searchQuery, type SearchItem } from '../../api/endpoints'
 import { Mark } from '../ui/Mark'
 
 /**
@@ -14,24 +14,41 @@ import { Mark } from '../ui/Mark'
  * unreachable, the palette says so. It never shows "no results", because a
  * visitor cannot tell an outage from a spelling mistake, and on a reference site
  * that difference decides whether they trust the next number they see.
+ *
+ * Types come from the generated schema, never hand-written. An earlier version
+ * declared its own and guessed wrong — `hits`/`kind`/`title` against the server's
+ * `items`/`type`/`label` — which made the palette throw the moment anyone typed a
+ * second character. It shipped that way because nothing in the review harness
+ * ever typed into it.
  */
 
 const RECENT_KEY = 'gridiron.recent-searches'
 const MAX_RECENT = 5
 
-function readRecent(): SearchHit[] {
+/** Labels for the groups the server returns, in the order it returns them. */
+const GROUP_LABELS: Record<string, string> = {
+  player: 'Players',
+  team: 'Teams',
+  team_season: 'Team seasons',
+  game: 'Games',
+  season: 'Seasons',
+  draft: 'Draft classes',
+  navigation: 'Go to',
+}
+
+function readRecent(): SearchItem[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY)
-    return raw ? (JSON.parse(raw) as SearchHit[]).slice(0, MAX_RECENT) : []
+    return raw ? (JSON.parse(raw) as SearchItem[]).slice(0, MAX_RECENT) : []
   } catch {
     return []
   }
 }
 
-function rememberRecent(hit: SearchHit): void {
+function rememberRecent(item: SearchItem): void {
   try {
-    const existing = readRecent().filter((h) => h.href !== hit.href)
-    localStorage.setItem(RECENT_KEY, JSON.stringify([hit, ...existing].slice(0, MAX_RECENT)))
+    const existing = readRecent().filter((h) => h.href !== item.href)
+    localStorage.setItem(RECENT_KEY, JSON.stringify([item, ...existing].slice(0, MAX_RECENT)))
   } catch {
     /* A search we cannot remember still worked. */
   }
@@ -87,20 +104,21 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
-  const { data, error, isFetching } = useQuery({
-    queryKey: ['search', query],
-    queryFn: () => search(query),
-    enabled: query.trim().length >= 2,
-    staleTime: 30_000,
-  })
+  const { data, error, isFetching } = useQuery(searchQuery(query))
 
-  const recent = query ? [] : readRecent()
-  const hits: SearchHit[] = query.trim().length >= 2 ? (data?.groups.flatMap((g) => g.hits) ?? []) : recent
+  const searching = query.trim().length >= 2
+  const recent = searching ? [] : readRecent()
+  const groups = searching
+    ? (data?.groups ?? []).filter((group) => group.items.length)
+    : recent.length
+      ? [{ type: 'recent', items: recent }]
+      : []
+  const flat: SearchItem[] = groups.flatMap((group) => group.items)
 
   const go = useCallback(
-    (hit: SearchHit) => {
-      rememberRecent(hit)
-      navigate(hit.href)
+    (item: SearchItem) => {
+      rememberRecent(item)
+      navigate(item.href)
       onClose()
     },
     [navigate, onClose],
@@ -131,13 +149,13 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
               if (event.key === 'Escape') onClose()
               if (event.key === 'ArrowDown') {
                 event.preventDefault()
-                setActive((i) => Math.min(i + 1, hits.length - 1))
+                setActive((i) => Math.min(i + 1, flat.length - 1))
               }
               if (event.key === 'ArrowUp') {
                 event.preventDefault()
                 setActive((i) => Math.max(i - 1, 0))
               }
-              if (event.key === 'Enter' && hits[active]) go(hits[active])
+              if (event.key === 'Enter' && flat[active]) go(flat[active])
             }}
             placeholder="Find any player, team, or game"
             className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-ink-3"
@@ -151,49 +169,49 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
                 ? 'Search is unreachable right now — this is not “no results”.'
                 : 'Search failed. Try again in a moment.'}
             </p>
-          ) : query.trim().length >= 2 && !hits.length && !isFetching ? (
+          ) : searching && !flat.length && !isFetching ? (
             <p className="px-3 py-4 text-[13px] text-ink-3">
               Nothing matches “{query}”. Players are searchable from 1999 onward.
             </p>
           ) : null}
 
-          {!query && recent.length ? (
+          {!searching && recent.length ? (
             <p className="px-3 pb-1 pt-2 text-[11px] uppercase tracking-wide text-ink-3">
               Recent · this browser only
             </p>
           ) : null}
 
-          {(query.trim().length >= 2 ? (data?.groups ?? []) : [{ kind: 'recent', label: '', hits: recent }])
-            .filter((group) => group.hits.length)
-            .map((group) => (
-              <div key={group.kind}>
-                {group.label ? (
-                  <p className="px-3 pb-1 pt-2 text-[11px] uppercase tracking-wide text-ink-3">{group.label}</p>
-                ) : null}
-                {group.hits.map((hit) => {
-                  const index = hits.indexOf(hit)
-                  return (
-                    <button
-                      key={`${hit.kind}-${hit.id}`}
-                      type="button"
-                      onMouseEnter={() => setActive(index)}
-                      onClick={() => go(hit)}
-                      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left ${
-                        index === active ? 'bg-row-hover' : ''
-                      }`}
-                    >
-                      <Mark src={hit.image} label={hit.title} size={24} rounded />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px]">{hit.title}</span>
-                        {hit.subtitle ? (
-                          <span className="block truncate text-[11px] text-ink-3">{hit.subtitle}</span>
-                        ) : null}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            ))}
+          {groups.map((group) => (
+            <div key={group.type}>
+              {GROUP_LABELS[group.type] ? (
+                <p className="px-3 pb-1 pt-2 text-[11px] uppercase tracking-wide text-ink-3">
+                  {GROUP_LABELS[group.type]}
+                </p>
+              ) : null}
+              {group.items.map((item) => {
+                const index = flat.indexOf(item)
+                return (
+                  <button
+                    key={`${group.type}-${item.id}`}
+                    type="button"
+                    onMouseEnter={() => setActive(index)}
+                    onClick={() => go(item)}
+                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left ${
+                      index === active ? 'bg-row-hover' : ''
+                    }`}
+                  >
+                    <Mark src={item.headshot_url ?? item.logo} label={item.label} size={24} rounded />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px]">{item.label}</span>
+                      {item.sublabel ? (
+                        <span className="block truncate text-[11px] text-ink-3">{item.sublabel}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>

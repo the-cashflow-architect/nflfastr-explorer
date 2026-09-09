@@ -8135,6 +8135,106 @@
         "title": "ScoringPlay",
         "type": "object"
       },
+      "SearchGroup": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "items"
+        ],
+        "title": "SearchGroup",
+        "type": "object"
+      },
+      "SearchItem": {
+        "additionalProperties": true,
+        "description": "One result. `label`, `href` and `id` are the contract; the rest is context.\n\nExtra keys are allowed through because each group carries its own \u2014 a player\nhas a headshot and seasons, a game has a score \u2014 and enumerating every\nvariant here would be a second place to keep in step with the repo.",
+        "properties": {
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "href": {
+            "title": "Href",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "logo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logo"
+          },
+          "sublabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sublabel"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "href"
+        ],
+        "title": "SearchItem",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SearchGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "groups"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
       "SeasonHub": {
         "properties": {
           "bracket": {
@@ -14323,9 +14423,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Search Api Search Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SearchResponse"
                 }
               }
             },

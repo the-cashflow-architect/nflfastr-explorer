@@ -2538,6 +2538,44 @@ export interface components {
             /** Team */
             team?: string | null;
         };
+        /** SearchGroup */
+        SearchGroup: {
+            /** Items */
+            items: components["schemas"]["SearchItem"][];
+            /** Type */
+            type: string;
+        };
+        /**
+         * SearchItem
+         * @description One result. `label`, `href` and `id` are the contract; the rest is context.
+         *
+         *     Extra keys are allowed through because each group carries its own — a player
+         *     has a headshot and seasons, a game has a score — and enumerating every
+         *     variant here would be a second place to keep in step with the repo.
+         */
+        SearchItem: {
+            /** Headshot Url */
+            headshot_url?: string | null;
+            /** Href */
+            href: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Logo */
+            logo?: string | null;
+            /** Sublabel */
+            sublabel?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SearchResponse */
+        SearchResponse: {
+            /** Groups */
+            groups: components["schemas"]["SearchGroup"][];
+            /** Query */
+            query: string;
+        };
         /** SeasonHub */
         SeasonHub: {
             bracket?: components["schemas"]["Bracket"] | null;
@@ -4480,9 +4518,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SearchResponse"];
                 };
             };
             /** @description Validation Error */

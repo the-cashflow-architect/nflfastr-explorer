@@ -59,6 +59,43 @@ const ROUTES = [
   ['not-found', '/nope/nope'],
 ]
 
+/**
+ * Interactions the route sweep cannot reach.
+ *
+ * Loading a page only exercises what renders on arrival. The global search
+ * palette shipped broken to production because nothing ever typed into it: its
+ * client types were hand-written against the wrong field names, and it threw on
+ * the second keystroke. Anything that only runs on input needs a step here.
+ */
+async function checkInteractions(context, report) {
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (e) => errors.push('PAGEERROR ' + String(e.message).slice(0, 200)))
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 160)) })
+  let results = 0
+  try {
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 45000 })
+    await page.keyboard.press('Control+k')
+    await page.waitForSelector('[role="dialog"] input', { timeout: 10000 })
+    await page.type('[role="dialog"] input', 'mahom', { delay: 40 })
+    await page.waitForTimeout(2500)
+    results = await page.locator('[role="dialog"] button').count()
+    await page.screenshot({ path: path.join(OUT, 'interaction-search.png') })
+  } catch (e) {
+    errors.push('SEARCH ' + String(e.message).slice(0, 160))
+  }
+  report.push({
+    name: 'search-palette',
+    route: '(Cmd+K, type "mahom")',
+    chars: results * 100,
+    words: results,
+    errors: [...new Set(errors)].slice(0, 4),
+    failed: [],
+    snippet: `${results} result row(s) rendered`,
+  })
+  await page.close()
+}
+
 ;(async () => {
   fs.mkdirSync(OUT, { recursive: true })
   const browser = await chromium.launch({ executablePath: EXE })
@@ -108,6 +145,7 @@ const ROUTES = [
         }
         await page.close()
       }
+      if (theme === 'dark' && tag === 'desktop') await checkInteractions(context, report)
       await context.close()
     }
   }

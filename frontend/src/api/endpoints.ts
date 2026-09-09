@@ -70,6 +70,17 @@ function reference<T>(key: readonly unknown[], path: string, params?: Record<str
 
 export const useCoverageQuery = () => useQuery(reference<Coverage>(['coverage'], '/api/coverage'))
 
+/** One search result. Groups arrive in a fixed order and may be empty. */
+export type SearchItem = NonNullable<SearchResults['groups']>[number]['items'][number]
+
+export const searchQuery = (q: string, limit = 8) =>
+  reference<SearchResults>(['search', q, limit], '/api/search', { q, limit }, {
+    enabled: q.trim().length >= 2,
+    // A search is typed, not browsed: half a minute is plenty and keeps the
+    // palette instant when someone backspaces a character.
+    staleTime: 30_000,
+  })
+
 export const usePlayerIndex = (params: PlayerIndexParams) =>
   useQuery(reference<PlayerIndex>(['players', params], '/api/players', params ?? {}))
 
