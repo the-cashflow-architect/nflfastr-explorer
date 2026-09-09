@@ -79,6 +79,11 @@ class DatasetMeta(BaseModel):
     description: str
     source: str
     row_count: int
+    # The seasons the dataset's table actually holds, measured off the rows.
+    # Null only for a table with no season column at all; a dataset that is
+    # loaded always reports the window it can really answer for.
+    season_min: int | None = None
+    season_max: int | None = None
     columns: list[ColumnMeta]
     filters: list[FilterDef]
     default_columns: list[str]

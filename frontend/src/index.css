@@ -1,24 +1,125 @@
 @import "tailwindcss";
 
-/* Applies `light:` utilities when <html data-theme="light"> is set (or an
-   ancestor has it) — the toggle in the header flips that attribute. The app
-   is dark-by-default everywhere else, so this is additive: only surfaces
-   that got a `light:` companion class change under the light theme. */
-@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+/* ---------------------------------------------------------------------------
+   Colour
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-surface-950: #070b12;
-  --color-surface-900: #0d1420;
-  --color-surface-850: #121b2b;
-  --color-surface-800: #182236;
-  --color-surface-700: #243047;
-  --color-accent: #3b82f6;
-  --color-accent-soft: #1d4ed8;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-muted: #94a3b8;
-  --color-border: rgba(148, 163, 184, 0.14);
+   Every colour in the product is defined here, once per theme, and nowhere
+   else. A component that writes a hex value is a bug: it will be wrong in one
+   of the two themes, and it will drift from the eleven other components that
+   made the same guess.
+
+   Three states, deliberately: no attribute means follow the system, and an
+   explicit `data-theme` wins in both directions. That is why the dark block is
+   guarded — `prefers-color-scheme: dark` must not override someone who chose
+   light.
+--------------------------------------------------------------------------- */
+
+:root {
+  /* Marker orange. It survives adjacency with thirty-two team colour schemes,
+     it reads as annotation rather than decoration, and it cannot be confused
+     with the win/loss semantics below — which a blue accent could not manage.
+     Spent on one thing per screen: the primary action, link hover, and the
+     current-item bar. Never a background fill. */
+  --c-accent: #c94a26;
+  --c-accent-hover: #b03f1f;
+  --c-on-accent: #ffffff;
+
+  /* The only two semantic colours. Muted on purpose: a table of results should
+     read as text, not as a traffic light. */
+  --c-positive: #2f6b4a;
+  --c-negative: #a8453b;
+
+  --c-page: #fbfaf8;
+  --c-raised: #ffffff;
+  --c-sunken: #f3f1ed;
+  --c-line: rgba(0, 0, 0, 0.1);
+  --c-line-strong: rgba(0, 0, 0, 0.18);
+
+  --c-text: #1a1918;
+  --c-text-secondary: #5c5b59;
+  --c-text-tertiary: #8a8987;
+
+  --c-row-hover: rgba(0, 0, 0, 0.035);
+  --c-row-rule: rgba(0, 0, 0, 0.06);
+  --c-track: rgba(0, 0, 0, 0.08);
+
+  /* Row heights for the three table densities. One control in one toolbar sets
+     this for every table in the product. */
+  --row-h: 30px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-accent: #f2795a;
+    --c-accent-hover: #ff8f72;
+    --c-on-accent: #1a1008;
+    --c-positive: #5f9e7a;
+    --c-negative: #d4756a;
+    --c-page: #0e0f11;
+    --c-raised: #17191c;
+    --c-sunken: #0a0b0d;
+    --c-line: rgba(255, 255, 255, 0.09);
+    --c-line-strong: rgba(255, 255, 255, 0.16);
+    --c-text: #e8e6e3;
+    --c-text-secondary: #a3a29f;
+    --c-text-tertiary: #6e6d6b;
+    --c-row-hover: rgba(255, 255, 255, 0.04);
+    --c-row-rule: rgba(255, 255, 255, 0.06);
+    --c-track: rgba(255, 255, 255, 0.08);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --c-accent: #f2795a;
+  --c-accent-hover: #ff8f72;
+  --c-on-accent: #1a1008;
+  --c-positive: #5f9e7a;
+  --c-negative: #d4756a;
+  --c-page: #0e0f11;
+  --c-raised: #17191c;
+  --c-sunken: #0a0b0d;
+  --c-line: rgba(255, 255, 255, 0.09);
+  --c-line-strong: rgba(255, 255, 255, 0.16);
+  --c-text: #e8e6e3;
+  --c-text-secondary: #a3a29f;
+  --c-text-tertiary: #6e6d6b;
+  --c-row-hover: rgba(255, 255, 255, 0.04);
+  --c-row-rule: rgba(255, 255, 255, 0.06);
+  --c-track: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+:root[data-density="comfortable"] { --row-h: 36px; }
+:root[data-density="compact"] { --row-h: 30px; }
+:root[data-density="dense"] { --row-h: 24px; }
+
+/* Utilities. Everything downstream uses these names, so a colour decision is
+   changed in one place above rather than hunted through the components. */
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-on-accent: var(--c-on-accent);
+  --color-positive: var(--c-positive);
+  --color-negative: var(--c-negative);
+
+  --color-page: var(--c-page);
+  --color-raised: var(--c-raised);
+  --color-sunken: var(--c-sunken);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+
+  --color-ink: var(--c-text);
+  --color-ink-2: var(--c-text-secondary);
+  --color-ink-3: var(--c-text-tertiary);
+
+  --color-row-hover: var(--c-row-hover);
+  --color-row-rule: var(--c-row-rule);
+  --color-track: var(--c-track);
 }
 
 * {
@@ -34,20 +135,36 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(59, 130, 246, 0.18), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(34, 197, 94, 0.08), transparent 50%),
-    var(--color-surface-950);
-  color: #e2e8f0;
+  /* No gradient. It was decoration, and it fought every chart drawn on top. */
+  background: var(--c-page);
+  color: var(--c-text);
+  font-size: 13px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
+  /* Columns of numbers that do not align are the fastest way a statistics site
+     looks amateur. Set once, globally, and never overridden. */
+  font-variant-numeric: tabular-nums;
 }
 
-[data-theme="light"] body {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(59, 130, 246, 0.08), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(34, 197, 94, 0.05), transparent 50%),
-    #f8fafc;
-  color: #0f172a;
+/* Links read as navigable without a single saturated pixel: a faint underline
+   that firms up and takes the accent on hover. */
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 25%, transparent);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  color: var(--c-accent);
+  text-decoration-color: currentColor;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -56,14 +173,40 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: var(--c-line-strong);
   border-radius: 999px;
-}
-
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.35);
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Two durations and one curve for the whole product. */
+@media (prefers-reduced-motion: no-preference) {
+  .motion-state {
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease,
+      opacity 120ms ease;
+  }
+  .motion-layout {
+    transition: height 200ms ease, transform 200ms ease, opacity 200ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Deep-linked anchors pulse once so the row you followed a link to is obvious. */
+@keyframes anchor-pulse {
+  from { background-color: color-mix(in srgb, var(--c-accent) 22%, transparent); }
+  to { background-color: transparent; }
+}
+
+:target {
+  animation: anchor-pulse 1.2s ease-out 1;
 }

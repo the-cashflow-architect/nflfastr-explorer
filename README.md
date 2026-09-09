@@ -4,9 +4,10 @@ Interactive explorer for [nflfastR](https://www.nflfastr.com/) / [nflverse](http
 
 ## Datasets
 
-- **Weekly Player Stats** — game-week player stats (2022–2025)
-- **Season Player Stats** — regular-season aggregates
-- **Play Explorer** — play-by-play rows (2024–2025)
+- **Weekly Player Stats** — game-week player stats (1999 onward)
+- **Season Player Stats** — regular-season aggregates (1999 onward)
+- **Play Explorer** — play-by-play rows for the seasons held resident; older
+  seasons are materialised per season for the game and player pages
 
 Data comes from the [nflverse-data](https://github.com/nflverse/nflverse-data) parquet releases and is queried locally with DuckDB. Each file is streamed to disk and read by DuckDB directly, with column projection pushed into the parquet reader, so a season of play-by-play never materialises the ~380 columns the app doesn't expose.
 
@@ -22,8 +23,9 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-First startup downloads parquet files from nflverse (may take a minute). They
-are cached in a DuckDB file (`DUCKDB_PATH`), so later starts are immediate.
+The API reads a DuckDB file (`DUCKDB_PATH`) built by its own job — run
+`python -m app.build` once (`--report` shows what is loaded). Startup downloads
+nothing.
 
 Copy `backend/.env.example` to `backend/.env` for the full list of settings.
 
@@ -58,25 +60,22 @@ All backend settings are environment variables; see `backend/.env.example`.
 | `CORS_ORIGINS` | *(empty)* | Comma-separated origins allowed to call the API. **The deployed frontend URL must be listed here** — localhost is always allowed, so a missing value works in dev and fails in production. |
 | `CORS_ORIGIN_REGEX` | *(empty)* | Regex for preview deploy URLs, e.g. `https://.*\.vercel\.app`. |
 | `DUCKDB_PATH` | `data/nflfastr.duckdb` | Where the cached data lives. Persisting it means a restart re-opens the tables instead of re-downloading them. |
-| `PLAYER_SEASONS` | `2022,2023,2024,2025` | Seasons loaded for the player tables. |
-| `PBP_SEASONS` | `2025` | Seasons loaded for play-by-play. This is the largest table by far — add seasons only if the instance has the memory. |
 | `DUCKDB_MEMORY_LIMIT` | `128MB` | DuckDB's buffer pool. It defaults to a share of **host** RAM and cannot see a container's memory limit, so this must be pinned well below the instance size. |
 | `DUCKDB_THREADS` | `1` | DuckDB worker threads. More threads means more concurrent buffers. |
 | `DOWNLOAD_TIMEOUT` | `180` | Seconds to wait on an nflverse parquet download. |
-| `DATA_MAX_AGE_HOURS` | `24` | Re-download a cached table once it is older than this. `0` disables. |
 | `EXPORT_MAX_ROWS` | `100000` | Hard ceiling on an export. Responses are streamed, and a capped export sets `X-Export-Truncated`. |
-| `PRELOAD_ON_STARTUP` | `true` | Warm the datasets in a background thread so the first request isn't stuck behind a download. |
 
 ### Deploying
 
-Datasets load lazily and one at a time. Measured against real nflverse data
-with the default settings, loading all three peaks at **~256 MB** — half of a
-512 MB instance — and takes about 7 seconds total.
+The database is built by its own job — `python -m app.build` — and every
+endpoint, the Finder included, reads the tables that job wrote. A deploy opens
+the file; it does not download forty nflverse releases while a health check
+waits on it.
 
-Two settings matter most on a small instance. `DUCKDB_MEMORY_LIMIT` must stay
-well below the container limit, because DuckDB sizes its buffer pool from host
-RAM and will otherwise over-allocate and be OOM-killed. `PBP_SEASONS` controls
-the largest table; each extra season adds to both load time and peak memory.
+`DUCKDB_MEMORY_LIMIT` matters most on a small instance: DuckDB sizes its buffer
+pool from host RAM, cannot see a container's limit, and will otherwise
+over-allocate and be OOM-killed. `PBP_RESIDENT_SEASONS` controls the largest
+table; each resident season adds to both build time and disk.
 
 DuckDB allows a single writing process per database file, so run one uvicorn
 worker (the default). If you scale to multiple workers or instances, give each

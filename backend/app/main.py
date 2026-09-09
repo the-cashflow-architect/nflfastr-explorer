@@ -1,42 +1,25 @@
 from __future__ import annotations
 
 import logging
-import threading
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .config import (
-    EXPORT_MAX_ROWS,
-    PRELOAD_ON_STARTUP,
-    cors_origin_regex,
-    cors_origins,
-)
+from .config import EXPORT_MAX_ROWS, cors_origin_regex, cors_origins
 from .data_store import store
 from .models import ExportRequest, FilterOptionsRequest, QueryRequest, RankingsRequest, WeeklyBreakdownRequest
+from .routers import ALL_ROUTERS
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Warm the datasets off the request path. It runs in a daemon thread so a
-    # slow nflverse download never blocks startup or the health check.
-    if PRELOAD_ON_STARTUP:
-        thread = threading.Thread(target=store.preload, name="preload", daemon=True)
-        thread.start()
-        logger.info("Started background dataset preload")
-    yield
-
-
+# No startup warm-up. Every endpoint asks the shared loader for the tables it
+# needs, and the database is built by `python -m app.build` as its own job, so
+# there is nothing left for a background thread at boot to get ahead of.
 app = FastAPI(
     title="nflfastR Explorer API",
     description="Query nflverse / nflfastR data with smart filtering",
     version="0.1.0",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -47,6 +30,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Every package-owned router (coverage today; players, teams, games, ... as
+# each package lands) mounts here and nowhere else. This is additive by
+# construction — it never touches the dataset endpoints declared below.
+for _router in ALL_ROUTERS:
+    app.include_router(_router)
 
 
 @app.get("/api/health")
