@@ -1,5 +1,16 @@
+import { useEffect, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
 import { ApiError } from '../../api/client'
+
+/**
+ * How long a wait can run before silence becomes dishonest.
+ *
+ * The API sleeps between visits and takes the better part of a minute to wake —
+ * measured at 43 seconds from cold, against 0.7 warm. An unexplained "Loading…"
+ * for that long does not read as a slow server; it reads as a broken product,
+ * and the visitor closes it. Saying what is happening costs nothing and is true.
+ */
+const WAKING_AFTER_MS = 4000
 
 /**
  * How every page in the product handles waiting and failing.
@@ -55,7 +66,7 @@ export function QueryBoundary({
   }
 
   if (isLoading) {
-    return <p className="px-1 py-6 text-[13px] text-ink-3">Loading…</p>
+    return <Waiting />
   }
 
   if (isEmpty) {
@@ -63,4 +74,32 @@ export function QueryBoundary({
   }
 
   return <>{children}</>
+}
+
+/**
+ * The loading line, which grows an explanation if the wait gets long.
+ *
+ * Deliberately not a progress bar or a spinner: there is nothing to measure and
+ * nothing the visitor can do. It is one sentence that turns an apparent hang
+ * into a known, finite wait.
+ */
+function Waiting() {
+  const [waking, setWaking] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setWaking(true), WAKING_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
+  return (
+    <div className="px-1 py-6 text-[13px] text-ink-3">
+      <p>Loading…</p>
+      {waking ? (
+        <p className="mt-1 max-w-prose">
+          The server sleeps when nobody is using it, and takes about a minute to wake.
+          This only happens on the first request.
+        </p>
+      ) : null}
+    </div>
+  )
 }

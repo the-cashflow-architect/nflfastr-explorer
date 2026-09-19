@@ -1,0 +1,17 @@
+{
+  "appId": "com.cashflowarchitect.gridiron",
+  "appName": "Gridiron",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0e0f11",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#0e0f11",
+      "showSpinner": false
+    }
+  }
+}

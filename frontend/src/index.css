@@ -210,3 +210,67 @@ a:hover {
 :target {
   animation: anchor-pulse 1.2s ease-out 1;
 }
+
+/* ---- Offline notice -------------------------------------------------------
+
+   Stated, not shouted. It carries no accent colour because it is not an action
+   and there is nothing here to do; it is the app being honest about how old the
+   numbers below it are. It sits above everything so it cannot be scrolled past
+   and mistaken for a one-off. */
+
+.offline-banner {
+  /* Anchored to the bottom, not the top. The shell's own header is already
+     sticky at top: 0, and two sticky bars claiming the same edge overlap. The
+     bottom is free, stays visible however far the page is scrolled, and does
+     not shift the layout when the connection drops. */
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+  background: var(--c-sunken);
+  border-top: 1px solid var(--c-line-strong);
+  color: var(--c-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.offline-banner time {
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Device -------------------------------------------------------------- */
+
+/* The notch and the Dynamic Island overlap the web view, and the shell's header
+   is sticky at the very top, so it is the surface that has to clear them. */
+.app-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* An installed app should not rubber-band past its own edges or flash blue on
+   tap. Text stays selectable — this is a reference site and people copy figures
+   out of it. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+  /* Apple's 44pt floor for anything a finger has to land on. Table cells and
+     inline links are excluded: they are read, and a dense stat table is the
+     point of the product. */
+  button:not(.is-inline),
+  [role='button']:not(.is-inline) {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
