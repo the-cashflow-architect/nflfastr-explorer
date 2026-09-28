@@ -12,8 +12,10 @@
     "review": "node scripts/review-pages.cjs",
     "fonts": "node scripts/vendor-fonts.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "ios": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios": "node scripts/build-seed-cache.mjs && npm run build && npx cap sync ios",
+    "ios:open": "npx cap open ios",
+    "seed": "node scripts/build-seed-cache.mjs",
+    "review:seed": "node scripts/review-seed.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",
@@ -36,6 +38,7 @@
     "@capacitor/cli": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/query-core": "^5.103.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

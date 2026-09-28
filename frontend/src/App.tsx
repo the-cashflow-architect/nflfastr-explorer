@@ -1,10 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+import { removeOldestQuery } from '@tanstack/react-query-persist-client'
 import { RouterProvider } from 'react-router-dom'
 import { BreadcrumbProvider } from './components/shell/Breadcrumb'
-import { OfflineBanner } from './components/shell/OfflineBanner'
-import { CACHE_KEY, CACHE_MAX_AGE } from './lib/offline'
+import { FreshnessBanner } from './components/shell/FreshnessBanner'
+import { CACHE_KEY, CACHE_MAX_AGE, shouldPersist } from './lib/offline'
 import { router } from './routes'
 
 const queryClient = new QueryClient({
@@ -16,9 +17,8 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: 1,
-      // An entry has to outlive the session for it to be worth writing to disk:
-      // the default five minutes would evict it long before the app is opened
-      // again, and the persisted copy would only ever be empty.
+      // An entry has to outlive the session for it to be worth writing to disk.
+      // Queries built in api/endpoints.ts set their own, matching value.
       gcTime: CACHE_MAX_AGE,
     },
   },
@@ -37,6 +37,10 @@ const queryClient = new QueryClient({
 const persister = createSyncStoragePersister({
   storage: typeof window === 'undefined' ? undefined : window.localStorage,
   key: CACHE_KEY,
+  // A few megabytes is all a web view allows. When a write would overflow it,
+  // drop the least recently used page and try again, rather than silently
+  // leaving yesterday's snapshot on disk forever.
+  retry: removeOldestQuery,
 })
 
 export default function App() {
@@ -46,15 +50,12 @@ export default function App() {
       persistOptions={{
         persister,
         maxAge: CACHE_MAX_AGE,
-        // Never persist a failure. A cached error would greet the next launch
-        // with a problem the server may have long since stopped having.
-        dehydrateOptions: {
-          shouldDehydrateQuery: (query) => query.state.status === 'success',
-        },
+        // Reference pages only, and never a failure — see shouldPersist.
+        dehydrateOptions: { shouldDehydrateQuery: shouldPersist },
       }}
     >
       <BreadcrumbProvider>
-        <OfflineBanner />
+        <FreshnessBanner />
         <RouterProvider router={router} />
       </BreadcrumbProvider>
     </PersistQueryClientProvider>

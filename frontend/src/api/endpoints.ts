@@ -1,6 +1,7 @@
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query'
 import { api } from './client'
 import type { operations } from './schema'
+import { CACHE_MAX_AGE } from '../lib/offline'
 
 /**
  * Every call the product makes to the API, typed from the server's own schema.
@@ -60,7 +61,11 @@ export type TeamIndexParams = Params<'get_team_index_api_teams_get'>
 
 /** Reference data changes weekly at most; an hour of cache costs the visitor nothing. */
 const HOUR = 60 * 60 * 1000
-const REFERENCE = { staleTime: HOUR, gcTime: 2 * HOUR }
+// gcTime has to be at least the persisted cache's max age. An entry dropped
+// from memory is dropped from the next snapshot written to disk, so a two-hour
+// gcTime quietly emptied the saved cache of anything not viewed in the last two
+// hours — TanStack's persistence docs call this out as the classic mistake.
+const REFERENCE = { staleTime: HOUR, gcTime: CACHE_MAX_AGE }
 
 type Extra<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>
 
@@ -68,7 +73,29 @@ function reference<T>(key: readonly unknown[], path: string, params?: Record<str
   return { queryKey: key, queryFn: () => api<T>(path, params), ...REFERENCE, ...extra }
 }
 
-export const useCoverageQuery = () => useQuery(reference<Coverage>(['coverage'], '/api/coverage'))
+/**
+ * useQuery for reference pages: when a refresh fails, keep showing what it has.
+ *
+ * React Query v5 keeps the data when a refetch fails but flips the query to an
+ * error, and QueryBoundary — rightly — renders an error in place of the page.
+ * With a saved cache that is the wrong trade: the visitor on the subway, or a
+ * reviewer on the day the server is down, had real figures on screen and gets a
+ * connection error instead.
+ *
+ * So a failure only surfaces as the page's error when there is nothing to show.
+ * It is not hidden: the FreshnessBanner reads the same query and says the
+ * figures could not be updated, and when they were from. With no data at all,
+ * the error reaches QueryBoundary exactly as before.
+ */
+function useReferenceQuery<T>(options: UseQueryOptions<T, Error, T, readonly unknown[]>): UseQueryResult<T, Error> {
+  const result = useQuery(options)
+  if (result.error && result.data !== undefined) {
+    return { ...result, error: null } as unknown as UseQueryResult<T, Error>
+  }
+  return result
+}
+
+export const useCoverageQuery = () => useReferenceQuery(reference<Coverage>(['coverage'], '/api/coverage'))
 
 /** One search result. Groups arrive in a fixed order and may be empty. */
 export type SearchItem = NonNullable<SearchResults['groups']>[number]['items'][number]
@@ -82,64 +109,64 @@ export const searchQuery = (q: string, limit = 8) =>
   })
 
 export const usePlayerIndex = (params: PlayerIndexParams) =>
-  useQuery(reference<PlayerIndex>(['players', params], '/api/players', params ?? {}))
+  useReferenceQuery(reference<PlayerIndex>(['players', params], '/api/players', params ?? {}))
 
 export const usePlayerHub = (gsisId: string | undefined) =>
-  useQuery(reference<PlayerHub>(['player', gsisId], `/api/players/${gsisId}`, undefined, { enabled: !!gsisId }))
+  useReferenceQuery(reference<PlayerHub>(['player', gsisId], `/api/players/${gsisId}`, undefined, { enabled: !!gsisId }))
 
 export const usePlayerPercentiles = (gsisId: string | undefined, params?: PlayerPercentileParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<PlayerPercentiles>(['player-percentiles', gsisId, params], `/api/players/${gsisId}/percentiles`, params ?? {}, {
       enabled: !!gsisId,
     }),
   )
 
 export const usePlayerGameLog = (gsisId: string | undefined, params?: PlayerGameLogParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<PlayerGameLog>(['player-gamelog', gsisId, params], `/api/players/${gsisId}/gamelog`, params ?? {}, {
       enabled: !!gsisId,
     }),
   )
 
 export const usePlayerSplits = (gsisId: string | undefined, params?: PlayerSplitsParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<PlayerSplits>(['player-splits', gsisId, params], `/api/players/${gsisId}/splits`, params ?? {}, {
       enabled: !!gsisId,
     }),
   )
 
 export const usePlayerAdvanced = (gsisId: string | undefined, params?: PlayerAdvancedParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<PlayerAdvanced>(['player-advanced', gsisId, params], `/api/players/${gsisId}/advanced`, params ?? {}, {
       enabled: !!gsisId,
     }),
   )
 
 export const useTeamIndex = (params?: TeamIndexParams) =>
-  useQuery(reference<TeamIndex>(['teams', params], '/api/teams', params ?? {}))
+  useReferenceQuery(reference<TeamIndex>(['teams', params], '/api/teams', params ?? {}))
 
 export const useFranchise = (abbr: string | undefined) =>
-  useQuery(reference<Franchise>(['franchise', abbr], `/api/teams/${abbr}`, undefined, { enabled: !!abbr }))
+  useReferenceQuery(reference<Franchise>(['franchise', abbr], `/api/teams/${abbr}`, undefined, { enabled: !!abbr }))
 
 export const useTeamSeason = (abbr: string | undefined, season: number | undefined) =>
-  useQuery(
+  useReferenceQuery(
     reference<TeamSeason>(['team-season', abbr, season], `/api/teams/${abbr}/${season}`, undefined, {
       enabled: !!abbr && !!season,
     }),
   )
 
 export const useTeamRoster = (abbr: string | undefined, season: number | undefined) =>
-  useQuery(
+  useReferenceQuery(
     reference<TeamRoster>(['team-roster', abbr, season], `/api/teams/${abbr}/${season}/roster`, undefined, {
       enabled: !!abbr && !!season,
     }),
   )
 
 export const useGame = (gameId: string | undefined) =>
-  useQuery(reference<Game>(['game', gameId], `/api/games/${gameId}`, undefined, { enabled: !!gameId }))
+  useReferenceQuery(reference<Game>(['game', gameId], `/api/games/${gameId}`, undefined, { enabled: !!gameId }))
 
 export const useGamePlays = (gameId: string | undefined, params?: GamePlaysParams, enabled = true) =>
-  useQuery(
+  useReferenceQuery(
     reference<GamePlays>(['game-plays', gameId, params], `/api/games/${gameId}/plays`, params ?? {}, {
       // The play log is large and lives behind a disclosure, so it is not
       // fetched until somebody opens it.
@@ -150,35 +177,35 @@ export const useGamePlays = (gameId: string | undefined, params?: GamePlaysParam
     }),
   )
 
-export const useSeasonIndex = () => useQuery(reference<SeasonIndex>(['seasons'], '/api/seasons'))
+export const useSeasonIndex = () => useReferenceQuery(reference<SeasonIndex>(['seasons'], '/api/seasons'))
 
 export const useSeasonHub = (season: number | undefined) =>
-  useQuery(reference<SeasonHub>(['season', season], `/api/seasons/${season}`, undefined, { enabled: !!season }))
+  useReferenceQuery(reference<SeasonHub>(['season', season], `/api/seasons/${season}`, undefined, { enabled: !!season }))
 
 export const useStandings = (season: number | undefined, params?: StandingsParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<Standings>(['standings', season, params], `/api/seasons/${season}/standings`, params ?? {}, {
       enabled: !!season,
     }),
   )
 
 export const useWeekScoreboard = (season: number | undefined, week: number | undefined) =>
-  useQuery(
+  useReferenceQuery(
     reference<WeekScoreboard>(['week', season, week], `/api/seasons/${season}/week/${week}`, undefined, {
       enabled: !!season && !!week,
     }),
   )
 
-export const useLeadersIndex = () => useQuery(reference<LeadersIndex>(['leaders'], '/api/leaders'))
+export const useLeadersIndex = () => useReferenceQuery(reference<LeadersIndex>(['leaders'], '/api/leaders'))
 
 export const useLeaderboard = (category: string | undefined, stat: string | undefined, params?: LeaderboardParams) =>
-  useQuery(
+  useReferenceQuery(
     reference<Leaderboard>(['leaderboard', category, stat, params], `/api/leaders/${category}/${stat}`, params ?? {}, {
       enabled: !!category && !!stat,
     }),
   )
 
-export const useDraftIndex = () => useQuery(reference<DraftIndex>(['draft'], '/api/draft'))
+export const useDraftIndex = () => useReferenceQuery(reference<DraftIndex>(['draft'], '/api/draft'))
 
 export const useDraftClass = (year: number | undefined) =>
-  useQuery(reference<DraftClass>(['draft-class', year], `/api/draft/${year}`, undefined, { enabled: !!year }))
+  useReferenceQuery(reference<DraftClass>(['draft-class', year], `/api/draft/${year}`, undefined, { enabled: !!year }))

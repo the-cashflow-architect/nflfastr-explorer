@@ -211,14 +211,13 @@ a:hover {
   animation: anchor-pulse 1.2s ease-out 1;
 }
 
-/* ---- Offline notice -------------------------------------------------------
+/* ---- Freshness notice -----------------------------------------------------
 
    Stated, not shouted. It carries no accent colour because it is not an action
    and there is nothing here to do; it is the app being honest about how old the
-   numbers below it are. It sits above everything so it cannot be scrolled past
-   and mistaken for a one-off. */
+   numbers above it are, whenever they did not arrive in this session. */
 
-.offline-banner {
+.freshness-banner {
   /* Anchored to the bottom, not the top. The shell's own header is already
      sticky at top: 0, and two sticky bars claiming the same edge overlap. The
      bottom is free, stays visible however far the page is scrolled, and does
@@ -239,7 +238,7 @@ a:hover {
   text-align: center;
 }
 
-.offline-banner time {
+.freshness-banner time {
   color: var(--c-text);
   font-variant-numeric: tabular-nums;
 }
@@ -273,4 +272,16 @@ body {
     min-height: 44px;
     touch-action: manipulation;
   }
+}
+
+.freshness-banner .is-spinning {
+  animation: freshness-spin 1.4s linear infinite;
+}
+
+@keyframes freshness-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freshness-banner .is-spinning { animation: none; }
 }
