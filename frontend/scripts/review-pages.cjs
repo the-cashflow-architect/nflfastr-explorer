@@ -56,6 +56,8 @@ const ROUTES = [
   ['compare', '/compare?players=00-0033873,00-0036355'],
   ['glossary', '/glossary'],
   ['about-data', '/about/data'],
+  ['about-privacy', '/about/privacy'],
+  ['about-support', '/about/support'],
   ['not-found', '/nope/nope'],
 ]
 

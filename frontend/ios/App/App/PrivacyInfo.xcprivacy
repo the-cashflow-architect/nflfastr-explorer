@@ -11,18 +11,12 @@
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
+	<!-- No required-reason APIs. The theme, density setting and cached figures
+	     live in the web view's own storage, which WebKit manages; none of the
+	     app's native plugins (app, network, splash screen, status bar) touch
+	     UserDefaults, file timestamps, disk space or system boot time. An
+	     earlier version declared UserDefaults here; that was inaccurate. -->
 	<key>NSPrivacyAccessedAPITypes</key>
-	<array>
-		<dict>
-			<!-- The theme, the density setting and the cached answers are kept on
-			     the device. CA92.1 = values written by this app alone. -->
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>CA92.1</string>
-			</array>
-		</dict>
-	</array>
+	<array/>
 </dict>
 </plist>

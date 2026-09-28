@@ -50,6 +50,8 @@ const LEAVES: Record<string, string> = {
   roster: 'Roster',
   standings: 'Standings',
   data: 'Data & methods',
+  privacy: 'Privacy',
+  support: 'Support',
 }
 
 function titleCase(segment: string): string {

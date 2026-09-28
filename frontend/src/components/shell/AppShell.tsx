@@ -90,6 +90,14 @@ export function AppShell() {
           <a href="https://nflverse.com" target="_blank" rel="noreferrer" className="no-underline hover:underline">
             Data from nflverse
           </a>
+          {/* Apple requires the privacy policy and a way to reach us inside the
+              app (Guidelines 5.1.1(i) and 1.5). The footer is on every page. */}
+          <NavLink to="/about/privacy" className="no-underline hover:underline">
+            Privacy
+          </NavLink>
+          <NavLink to="/about/support" className="no-underline hover:underline">
+            Support
+          </NavLink>
         </div>
       </footer>
     </div>

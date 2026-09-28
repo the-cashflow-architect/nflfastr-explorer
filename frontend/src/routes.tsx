@@ -24,6 +24,8 @@ import { FinderPage } from './pages/Finder/FinderPage'
 import { ComparePage } from './pages/Compare/ComparePage'
 import { GlossaryPage } from './pages/Glossary/GlossaryPage'
 import { AboutDataPage } from './pages/AboutData/AboutDataPage'
+import { PrivacyPage } from './pages/About/PrivacyPage'
+import { SupportPage } from './pages/About/SupportPage'
 
 /**
  * The route table. Real URLs, because every one of them is something a person
@@ -76,6 +78,8 @@ export const router = createBrowserRouter([
       { path: 'compare', element: <ComparePage /> },
       { path: 'glossary', element: <GlossaryPage /> },
       { path: 'about/data', element: <AboutDataPage /> },
+      { path: 'about/privacy', element: <PrivacyPage /> },
+      { path: 'about/support', element: <SupportPage /> },
 
       { path: '*', element: <NotFoundPage /> },
     ],
