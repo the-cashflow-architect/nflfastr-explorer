@@ -7,6 +7,8 @@
  * handles changes made after the app has mounted.
  */
 
+import { syncStatusBar } from '../lib/native'
+
 export type ThemeChoice = 'system' | 'light' | 'dark'
 export type Density = 'comfortable' | 'compact' | 'dense'
 
@@ -45,6 +47,7 @@ export function applyTheme(choice: ThemeChoice): void {
   // No attribute means "follow the system", which is what the CSS expects.
   if (choice === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', choice)
+  syncStatusBar()
 }
 
 export function getDensity(): Density {

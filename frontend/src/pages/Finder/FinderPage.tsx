@@ -19,6 +19,7 @@ import { QueryBoundary } from '../../components/ui/QueryBoundary'
 import { num, stat } from '../../design/format'
 import { buildFilterDefs, isNumeric } from '../../lib/filterDefs'
 import { activeFiltersToConditions } from '../../lib/filters'
+import { canDownload } from '../../lib/native'
 import { PLAY_QUICK_SUGGESTIONS } from '../../lib/quickFilterSuggestions'
 import type {
   ActiveFilter,
@@ -614,7 +615,9 @@ function ResultBlock({
         title="Results"
         note={`${total.toLocaleString()} matching ${total === 1 ? 'row' : 'rows'}`}
         controls={
-          <ExportControls datasetId={datasetId} conditions={conditions} sort={sort} columns={selected} total={total} />
+          canDownload ? (
+            <ExportControls datasetId={datasetId} conditions={conditions} sort={sort} columns={selected} total={total} />
+          ) : undefined
         }
       >
         <DataTable

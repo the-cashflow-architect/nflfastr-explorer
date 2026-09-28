@@ -1,124 +1,145 @@
 # Putting Gridiron on the App Store
 
-Everything that can be done without a Mac is done and committed. But read the
-next section before spending time on this one — Gridiron is the riskiest of the
-four apps, and one thing has to change before it is worth submitting.
+Everything that can be done without a Mac is done, committed and pushed to the
+branch `claude/eager-volta-uozifl`. Gridiron is still the riskiest of the four
+apps — read the first two sections before spending time on the rest.
 
 ---
 
-## The thing that decides whether this can ship
+## The sleeping server, and what was done instead of paying for it
 
-**The API sleeps, and takes 43 seconds to wake up.** I measured it against the
-live service today: 43.6 seconds on the first request, 0.7 seconds on the next.
+The API is on Render's free plan, which spins it down after 15 minutes idle. Measured on
+the live service: **43.6 seconds** for the first request, 0.7 seconds after that. You decided
+on 28 September not to move it to the $7/month plan, so the app is built to cope:
 
-That is Render's free plan doing what free plans do — it spins the service down
-after 15 minutes with no traffic. On the website it reads as a slow first load.
-In an app it is close to fatal:
-
-- An App Review reviewer opens the app on a fresh install, with nothing cached,
-  and watches a loading screen for the better part of a minute. Apps that appear
-  to hang get rejected as incomplete, and the reviewer has no reason to think
-  it's a sleeping server rather than a broken app.
-- A real visitor who opens it once a week hits the 43 seconds every single time.
-
-**My recommendation: move `gridiron-api` to Render's Starter plan, $7/month,
-before submitting.** The service never sleeps and every request is the 0.7
-seconds. This is already an open decision in Profusia ("Decide whether to pay
-$7/mo to remove the one-minute cold start") — for the website it was a judgement
-call, but for the App Store it's the difference between plausible and probably
-rejected.
-
-I can make the change on Render as soon as you say go. It's one setting.
-
-**What I did to soften it in the meantime:** the app now keeps every answer it
-receives on the device, so it opens instantly with the last-known figures and
-then refreshes in the background. If a wait does run long, it says *"The server
-sleeps when nobody is using it, and takes about a minute to wake"* rather than
-showing an anonymous spinner. That helps a returning visitor a lot. It does
-nothing for a reviewer's first launch, because their cache is empty.
+- **It never opens on a blank wait.** `npm run ios` fetches the home page's figures from the
+  live API and bundles them into the app. A fresh install — which is what an App Review
+  reviewer has — opens straight onto the home page.
+- **It never passes old figures off as current.** Anything shown from the device rather than
+  from this session's request says so at the bottom of the screen, with the date it was
+  saved: *"Showing figures saved … while the latest load"*, or *"Couldn't update. Showing
+  figures saved …"* if the server doesn't answer.
+- **Everything else still waits on the server** the first time it is opened. A reviewer who
+  goes straight to a player page on a cold server waits up to a minute, under a message that
+  says the server is waking. That is the remaining risk, and the $7 plan is still the only
+  thing that removes it.
 
 ---
 
 ## The other risk, stated plainly
 
-Apple's Guideline 4.2 rejects apps that are "a repackaged website". A reference
-site is the closest thing there is to that description, so Gridiron has the
-weakest case of the four apps regardless of the cold start.
-
-What's on its side: it works offline from the cache, it holds its own data on
-the device, it has no browser chrome, and it's a genuinely deep reference tool
-rather than a few pages. That is a real argument, but it is an argument — not a
-certainty. If Apple pushes back, the strongest answers are a Home Screen widget
-(a team's next game, a player's last line) and Spotlight search integration,
-both of which are things a website cannot do at all. Say the word and I'll build
-them.
-
-**Of the four apps, this is the one I'd submit last** — after the other three
-have been through review once and you know how the process goes.
+Guideline 4.2 rejects apps that are "a repackaged website", and a reference site is the
+closest thing there is to that description. In Gridiron's favour: it works offline from what
+it has saved, has no browser chrome, and is a deep tool rather than a few pages. That is an
+argument, not a certainty. If Apple pushes back, the strongest answers are a Home Screen
+widget (a team's next game, a player's last line) and Spotlight search — things a website
+cannot do. **Submit this one last**, after the other three have been through review once.
 
 ---
 
 ## What you need first
 
 - [ ] A Mac
-- [ ] **Xcode** — free, Mac App Store, ~8 GB
-- [ ] Your **Apple Developer Program** membership, active
+- [ ] **Xcode 26 or later.** Check with **Xcode → About Xcode**; update from the Mac App Store
+      if it is lower. The project is built on Capacitor 8, which needs Xcode 26.
+- [ ] Your **Apple Developer Program** membership, active (team `DJYJ6Z3ZJH`)
 - [ ] **Node.js 22+**
 
-The permanent identifier is `com.cashflowarchitect.gridiron`, derived from your
-GitHub account. It can never change once submitted; say so now if you want a
-different one.
+## Already decided — do not change
+
+| | |
+|---|---|
+| Bundle identifier | `com.evadaroo.gridiron` — on your own domain. It becomes permanent the moment the first build is uploaded. |
+| Team | `DJYJ6Z3ZJH`, already filled in. |
 
 ---
 
 ## Steps on the Mac
 
 ```bash
-git clone https://github.com/the-cashflow-architect/nflfastr-explorer.git
+git clone -b claude/eager-volta-uozifl https://github.com/the-cashflow-architect/nflfastr-explorer.git
 cd nflfastr-explorer/frontend
 npm install
 npm run ios
 npm run ios:open
 ```
 
-Then in Xcode: blue **App** icon → **App** target → **Signing & Capabilities** →
-tick **Automatically manage signing**, set **Team**. Pick a device and press ▶.
+The `-b claude/eager-volta-uozifl` matters: `main` does not have the iOS project until this
+branch is merged. `npm run ios` can take a couple of minutes the first time: it waits for the
+server to wake so it can bundle the home page's figures. If it stops saying it could not
+reach the API, run it again.
 
-To submit: **Product → Archive** (device dropdown on "Any iOS Device") →
-**Distribute App → App Store Connect**.
+In Xcode: blue **App** icon → **App** target → **Signing & Capabilities** → confirm **Team**
+shows your developer account. Pick an iPhone simulator and press ▶, then an **iPad Pro
+13-inch** (the app runs on iPad, so Apple reviews it on one).
 
-There is no database to build and nothing to download — the app talks to
-`https://gridiron-api-mhw9.onrender.com`, the same API the website uses.
+**The one check that matters most:** delete the app from the simulator, launch it fresh, and
+open a **player page** — not just the home page, which comes from the bundled figures and
+proves nothing about the connection. It should load (after up to a minute if the server was
+asleep). If it says it could not reach the server, send me a screenshot.
+
+To upload: device dropdown on **Any iOS Device** → **Product → Archive → Distribute App →
+App Store Connect → Upload**.
 
 ---
 
 ## What App Store Connect will ask
 
-**Privacy** — **"No, we do not collect data from this app."** True: no accounts,
-no identifiers, no analytics. It asks for public football statistics and shows
-them.
+**Privacy Policy URL and Support URL** — both required.
+
+- Privacy Policy URL: `https://nflfastr-explorer.onrender.com/about/privacy`
+- Support URL: `https://nflfastr-explorer.onrender.com/about/support`
+
+**These do not load today, and neither does any other link on the site except the home
+page** — the site is missing the rule that sends every address to the app. It is a one-time
+setting: Render dashboard → **nflfastr-explorer** (the static site) → **Redirects/Rewrites** →
+add Source `/*`, Destination `/index.html`, Action **Rewrite** → Save. Then open both URLs in
+a browser. The same pages are inside the app (footer → Privacy, Support), which Apple also
+requires.
+
+**App Privacy → Data collection** — **"No, we do not collect data from this app."** True: no
+accounts, no identifiers, no analytics. It asks for public football statistics and shows them.
+The API's host keeps ordinary request logs; that is covered in the privacy page.
 
 **Age rating** — **4+**.
 
 **Export compliance** — already declared.
 
-**Screenshots** — 6.7" iPhone. A player page, a leaderboard and the standings
-show what it is.
+**Screenshots** — two sets, because the app runs on iPad: **6.9" iPhone** (e.g. iPhone 17 Pro
+Max simulator) and **13" iPad** (iPad Pro 13-inch simulator), with **⌘S**. A player page, a
+leaderboard and the standings show what it is.
+
+---
+
+## How the app differs from the website
+
+- **Requests go through iOS, not the web view.** The live API only accepts requests from the
+  website's own address, and the app is not the website. Rather than change the server, the
+  app sends its requests through Capacitor's native networking, which the server sees as an
+  ordinary request.
+- **No export buttons.** "Export as CSV" and "Export JSON" cannot save a file inside an iPhone
+  web view — the tap does nothing — so the app does not offer them. The website still does.
+- **"Copy a link" copies the website address**, so the link opens for whoever receives it.
+- **The launch screen comes down on the first frame**, with a four-second self-hide as a
+  backstop. An earlier build never hid it at all.
 
 ---
 
 ## Verifying it locally
 
-All three of the project's gates pass:
-
 ```
 cd backend && python -m pytest -q                          # 395 passed
 cd frontend && npx tsc -b && npx oxlint --deny-warnings && npm run build
 cd frontend && npm run review                              # every route, real browser
+cd frontend && npm run review:native                       # the iPhone-only paths
+cd frontend && npm run review:seed                         # the bundled first-launch figures
 ```
 
-The third one needs an API with data behind it, which used to mean a four-minute
-build and 200 MB of downloads. There is now a shortcut:
+`review:native` runs the built app against a stand-in for the iPhone's native layer and fails
+if the launch screen is never dismissed, if an export button is offered, or if "copy a link"
+copies an address nobody can open. It failed on all of those against the earlier code.
+
+The browser reviews need an API with data behind it:
 
 ```bash
 cd backend
@@ -127,41 +148,7 @@ DUCKDB_PATH=/tmp/fixture.duckdb DUCKDB_MEMORY_LIMIT=1GB \
   CORS_ORIGINS=http://127.0.0.1:5173 uvicorn app.main:app --port 8000
 ```
 
-It builds the same database the test suite builds — the real loader, the real
-derived tables, over locally generated nflverse-shaped files covering 2001 and
-2024. The numbers are generated, not real, so it is for checking that pages
-render, never for looking at figures.
+That database is built by the real loader over locally generated files covering 2001 and 2024.
+Its numbers are generated, not real — for checking that pages render, never for figures.
 
----
-
-## What I could not verify
-
-The app builds, typechecks, lints, passes all 395 backend tests, renders every
-route in a real browser, and — checked directly — shows a full page of cached
-figures with the API unreachable, under an honest banner saying when they were
-saved.
-
-**I could not compile the actual iOS app**, which needs Xcode on macOS.
-
----
-
-## What changed in the app itself
-
-- **It opens instantly instead of waiting on the server.** Every answer is kept
-  on the device, so the last-known figures are on screen immediately and the
-  fresh ones replace them when they arrive.
-- **It works with no signal**, showing what it last fetched — under a bar that
-  says there is no connection and when those figures were saved. It never lets
-  an old number pass for a current one.
-- **A long wait explains itself** instead of showing a silent spinner.
-- **It no longer fetches fonts from Google**, so it renders correctly offline.
-
----
-
-## One note on how this was delivered
-
-Your working agreement for this repo says to push straight to `main`. This
-session was started with an instruction to develop on `claude/eager-volta-uozifl`
-and not to push anywhere else, so that is where the work is. Merging it to
-`main` deploys it, and nothing here changes the website's behaviour except the
-four improvements above — which are good for the website too.
+**Not checked: the actual iOS build**, which needs Xcode on macOS.

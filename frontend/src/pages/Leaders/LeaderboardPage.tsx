@@ -2,6 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useLeaderboard, useLeadersIndex, useTeamIndex, type Leaderboard } from '../../api/endpoints'
 import { DataTable, type Column } from '../../components/ui/DataTable'
 import { downloadCsv } from '../../components/ui/downloadCsv'
+import { canDownload } from '../../lib/native'
 import { ComputedByUs, EraBadge } from '../../components/ui/Honesty'
 import { PageHeader, Segmented, Chip } from '../../components/ui/Page'
 import { QueryBoundary } from '../../components/ui/QueryBoundary'
@@ -270,13 +271,15 @@ function Board({
               rowKey={(row, index) => `${row.gsis_id}-${row.season ?? ''}-${row.week ?? ''}-${index}`}
               emptyMessage={data.note ?? 'No player clears these filters.'}
               toolbar={
-                <button
-                  type="button"
-                  onClick={() => downloadJson(`${category}-${stat}-leaders.json`, data)}
-                  className="motion-state rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-3 hover:border-line-strong hover:text-ink"
-                >
-                  Export JSON
-                </button>
+                canDownload ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadJson(`${category}-${stat}-leaders.json`, data)}
+                    className="motion-state rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-3 hover:border-line-strong hover:text-ink"
+                  >
+                    Export JSON
+                  </button>
+                ) : undefined
               }
               onExport={(visible, sorted) =>
                 downloadCsv(`${category}-${stat}-leaders.csv`, visible, sorted, (row, column) => exportCell(row, column.id))

@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Download, Link2, Rows3 } 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getDensity, setDensity, type Density } from '../../design/theme'
 import { Empty } from './Honesty'
+import { canDownload, shareableUrl } from '../../lib/native'
 
 /**
  * The one table in the product.
@@ -173,14 +174,14 @@ export function DataTable<Row>({
           >
             <Rows3 className="h-4 w-4" />
           </IconButton>
-          {onExport ? (
+          {onExport && canDownload ? (
             <IconButton label="Export as CSV" onClick={() => onExport(visible, sorted)}>
               <Download className="h-4 w-4" />
             </IconButton>
           ) : null}
           <IconButton
             label="Copy a link to this view"
-            onClick={() => void navigator.clipboard?.writeText(window.location.href)}
+            onClick={() => void navigator.clipboard?.writeText(shareableUrl())}
           >
             <Link2 className="h-4 w-4" />
           </IconButton>

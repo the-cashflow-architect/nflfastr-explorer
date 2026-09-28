@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { revealApp } from './lib/native'
 import { seedIfEmpty } from './lib/offline'
 import './index.css'
 
@@ -13,4 +14,5 @@ void seedIfEmpty().finally(() => {
       <App />
     </StrictMode>,
   )
+  revealApp()
 })

@@ -9,9 +9,13 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchAutoHide": false,
+      "launchAutoHide": true,
       "backgroundColor": "#0e0f11",
-      "showSpinner": false
+      "showSpinner": false,
+      "launchShowDuration": 4000
+    },
+    "CapacitorHttp": {
+      "enabled": true
     }
   }
 }
