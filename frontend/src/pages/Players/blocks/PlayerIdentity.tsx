@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { CollegeLink, DraftClassLink } from '../../../components/ui/EntityLink'
 import { height, num, plural } from '../../../design/format'
 import type { PlayerHub } from '../../../api/endpoints'
+import { leagueImage } from '../../../lib/native'
 
 /**
  * Who this player is, in two lines under the page title.
@@ -85,7 +86,9 @@ export function PlayerHeadshot({
   size?: number
 }) {
   const [broken, setBroken] = useState(false)
-  if (!url || broken) {
+  // In the iOS app there is never a photo to load: see leagueImage.
+  const image = leagueImage(url)
+  if (!image || broken) {
     // No headshot is a gap, not a reason to draw a silhouette that implies one.
     return (
       <span
@@ -98,7 +101,7 @@ export function PlayerHeadshot({
   }
   return (
     <img
-      src={url}
+      src={image}
       alt=""
       width={size}
       height={size}

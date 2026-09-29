@@ -114,7 +114,8 @@ is the right answer, so you can enter it with confidence:
   for longer than it takes to answer the request*. Its own example of something that need not
   be declared is an IP address that arrives with a request and is not kept.
 - The app sends nothing about the person using it: no account, no identifier, no analytics, no
-  advertising. It asks the server for public football statistics and shows them.
+  advertising. It asks the server for public football statistics and shows them. It shows no
+  NFL photos or logos, so it contacts no image server either.
 - The one thing kept anywhere is the server host's ordinary request log, which can include the
   network address a request came from. Render keeps it for at most 30 days to run the service.
   Nobody uses it to locate, recognise or measure anyone, and it is linked to nothing, because
@@ -131,7 +132,10 @@ the app. The recommendation is still "No data collected".
 
 **Screenshots** — two sets, because the app runs on iPad: **6.9" iPhone** (e.g. iPhone 17 Pro
 Max simulator) and **13" iPad** (iPad Pro 13-inch simulator), with **⌘S**. A player page, a
-leaderboard and the standings show what it is.
+leaderboard and the standings show what it is. Take them **from the app in the simulator, never
+from the website**: the app deliberately shows no NFL logos or player photos (team
+abbreviations and player initials stand in for them), and the website still does. A screenshot
+of the website would put in the store listing the very marks the app leaves out.
 
 ---
 
@@ -144,6 +148,10 @@ leaderboard and the standings show what it is.
 - **No export buttons.** "Export as CSV" and "Export JSON" cannot save a file inside an iPhone
   web view — the tap does nothing — so the app does not offer them. The website still does.
 - **"Copy a link" copies the website address**, so the link opens for whoever receives it.
+- **No NFL logos or player photos.** The club logos are the clubs' trademarks and the headshots
+  come from the NFL's own servers, with no licence behind either, so the app shows team
+  abbreviations and player initials in their place (your decision, 29 September). The website
+  keeps the images.
 - **The launch screen comes down on the first frame**, with a four-second self-hide as a
   backstop. An earlier build never hid it at all.
 

@@ -7,9 +7,9 @@ import { PageHeader } from '../../components/ui/Page'
  * Apple requires this inside the app (Guideline 5.1.1(i)), and it has to say
  * what is collected, who else sees it, and how long it is kept. Gridiron's
  * honest answer is short — no accounts, no analytics — but not "nothing": the
- * server keeps request logs, and player photos and team logos load straight
- * from the NFL's and GitHub's servers, which therefore see the device ask for
- * them. Both are stated plainly rather than rounded down to zero, which is the
+ * server keeps request logs, and on the website player photos and team logos
+ * load straight from the NFL's and GitHub's servers, which therefore see the
+ * browser ask for them. (The iOS app shows neither — see leagueImage.) Both are stated plainly rather than rounded down to zero, which is the
  * same rule the rest of the product follows about its numbers.
  *
  * It is a reference document, so, like Data & methods, it carries no primary
@@ -43,10 +43,11 @@ export function PrivacyPage() {
         </Section>
 
         <Section title="Photos and logos">
-          Player photos load directly from the NFL&rsquo;s image service (static.www.nfl.com), and team logos from
-          GitHub, where the open nflverse project publishes them. Your device asks those servers for the pictures
-          itself, so &mdash; as with any image on the web &mdash; they see that request, including your network address
-          and the kind of device, under their own privacy policies. We send them nothing else.
+          On the website, player photos load directly from the NFL&rsquo;s image service (static.www.nfl.com), and team
+          logos from GitHub, where the open nflverse project publishes them. Your browser asks those servers for the
+          pictures itself, so &mdash; as with any image on the web &mdash; they see that request, including your network
+          address and the kind of device, under their own privacy policies. We send them nothing else. The iOS app
+          shows no photos or logos, only team abbreviations and player initials, so it never contacts those servers.
         </Section>
 
         <Section title="What is kept on your device">
@@ -63,7 +64,7 @@ export function PrivacyPage() {
 
         <Section title="Third parties">
           We share no data with anyone. The only outside services involved are the ones named above: Render, which
-          hosts our server and this website, and the NFL and GitHub image servers your device contacts for pictures.
+          hosts our server and this website, and the NFL and GitHub image servers the website contacts for pictures.
           The statistics themselves come from nflverse and are public records about football, not about you. If this
           ever changes, this page will say so first, and anyone we share with will be held to the protection described
           here.

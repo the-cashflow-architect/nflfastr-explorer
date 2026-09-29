@@ -80,3 +80,17 @@ export function shareableUrl(): string {
  * where it works. The website still has it.
  */
 export const canDownload = !isNative
+
+/**
+ * The league image to load for a mark, or null for the text in its place.
+ *
+ * In the iOS app, always null. The logos are the clubs' trademarks and the
+ * headshots come from the NFL's own servers, with no licence behind either,
+ * and a store listing invites exactly that question (App Review 5.2.1). Adam
+ * decided on 29 September 2026 that the app shows the abbreviation or the
+ * initials instead. The website keeps the images.
+ */
+export function leagueImage(src: string | null | undefined): string | null {
+  if (!src || isNative) return null
+  return src
+}

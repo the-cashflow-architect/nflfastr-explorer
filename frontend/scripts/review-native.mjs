@@ -183,6 +183,56 @@ for (const e of errors) problems.push(`page error on a device: ${e}`)
   await broken.close()
 }
 
+/* ---- no NFL logos or player photos inside the app ----
+   Adam's decision (29 September 2026): the club logos are trademarks and the
+   headshots come from the NFL's own servers, with no licence behind either,
+   so the app shows the abbreviation or initials instead. The website keeps
+   them. The fixture's image URLs point nowhere real, so this context rewrites
+   them to the hosts production uses, and then no image may be asked for from
+   any host but the app's own. */
+{
+  const LEAGUE = /static\.www\.nfl\.com|nflverse|githubusercontent\.com|espncdn\.com/
+  const marks = await browser.newContext({ ...devices['iPhone 15 Pro'] })
+  await marks.addInitScript(nativeBridge)
+  await marks.route('**/*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname.startsWith('/api/')) {
+      try {
+        const response = await route.fetch({ url: `${API}${url.pathname}${url.search}` })
+        const body = (await response.text())
+          .replace(/https:\/\/example\.invalid\/(\d+)\.png/g, 'https://static.www.nfl.com/image/upload/f_auto,q_auto/league/fixture$1')
+          .replace(/https:\/\/example\.invalid\/([A-Z]+)(?:-[a-z]+)?\.png/g, 'https://github.com/nflverse/nflverse-pbp/raw/master/squared_logos/$1.png')
+        return await route.fulfill({ response, body, headers: { ...response.headers(), 'access-control-allow-origin': '*' } })
+      } catch {
+        return await route.abort()
+      }
+    }
+    if (url.hostname === '127.0.0.1') return await route.continue()
+    return await route.abort()
+  })
+  const p = await marks.newPage()
+  const offsite = new Set()
+  p.on('request', (r) => {
+    const url = new URL(r.url())
+    if (url.hostname !== '127.0.0.1' && (r.resourceType() === 'image' || LEAGUE.test(url.hostname))) offsite.add(url.hostname)
+  })
+  const imgs = []
+  for (const path of ['/', '/teams?season=2024', '/teams/KC', '/games/2024_01_BUF_KC', '/players/00-0000000']) {
+    await p.goto(base + path, { waitUntil: 'networkidle' })
+    imgs.push(...(await p.evaluate(() => [...document.images].map((i) => i.src).filter((src) => !src.startsWith(location.origin)))))
+  }
+  await p.click('#home-search').catch(async () => {
+    await p.goto(base + '/', { waitUntil: 'networkidle' })
+    await p.click('#home-search')
+  })
+  await p.type('[role="dialog"] input', 'player', { delay: 30 })
+  await p.waitForTimeout(1500)
+  imgs.push(...(await p.evaluate(() => [...document.images].map((i) => i.src).filter((src) => !src.startsWith(location.origin)))))
+  if (offsite.size) problems.push(`the app asked ${[...offsite].join(', ')} for images — it must show no NFL logos or player photos`)
+  if (imgs.length) problems.push(`the app rendered ${imgs.length} league image(s), e.g. ${imgs[0]}`)
+  await marks.close()
+}
+
 /* ---- the bundled first-launch figures, installed long after the build ----
    The snapshot carried the moment `npm run ios` ran as its timestamp, and the
    persister discards one older than 21 days, so an install three weeks after

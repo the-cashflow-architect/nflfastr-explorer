@@ -1,17 +1,19 @@
 import { useState } from 'react'
+import { leagueImage } from '../../lib/native'
 
 /**
  * A team logo or a player headshot, with a fallback that is not a broken icon.
  *
- * Every image on this site is hotlinked from a third party — ESPN for logos,
- * the NFL's own CDN for headshots. Those URLs go stale, get blocked by a
- * network, or simply 404 for a fringe player, and a browser's broken-image
- * glyph in the middle of a team header reads as "this site is broken" far more
- * loudly than a missing picture warrants.
+ * Every image on this site is hotlinked from a third party — nflverse's copies
+ * of the club logos on GitHub, the NFL's own CDN for headshots. Those URLs go
+ * stale, get blocked by a network, or simply 404 for a fringe player, and a
+ * browser's broken-image glyph in the middle of a team header reads as "this
+ * site is broken" far more loudly than a missing picture warrants.
  *
  * So a failed load collapses to the thing the image was standing in for: the
  * team's abbreviation, or the player's initials. That is also what renders
- * while offline, and what a screen reader gets either way.
+ * while offline, what a screen reader gets either way — and all the iOS app
+ * ever shows (see leagueImage in lib/native.ts).
  */
 export function Mark({
   src,
@@ -31,8 +33,9 @@ export function Mark({
   const [failed, setFailed] = useState(false)
   const shape = rounded ? 'rounded-full' : 'rounded'
   const style = { width: size, height: size }
+  const image = leagueImage(src)
 
-  if (!src || failed) {
+  if (!image || failed) {
     return (
       <span
         aria-hidden
@@ -46,7 +49,7 @@ export function Mark({
 
   return (
     <img
-      src={src}
+      src={image}
       alt=""
       width={size}
       height={size}
