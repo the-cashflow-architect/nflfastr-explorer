@@ -15,7 +15,7 @@ import { PageHeader } from '../../components/ui/Page'
  * It is a reference document, so, like Data & methods, it carries no primary
  * action.
  */
-const UPDATED = '28 September 2026'
+const UPDATED = '29 September 2026'
 const CONTACT = 'engineering@evadaroo.com'
 
 export function PrivacyPage() {
@@ -25,9 +25,9 @@ export function PrivacyPage() {
 
       <div className="mt-6 max-w-[680px] space-y-6 text-[14px] leading-6 text-ink-2">
         <p className="rounded-md border border-line bg-raised px-4 py-3 text-[15px] leading-6 text-ink">
-          Gridiron has no accounts, no analytics, no advertising and no tracking. We do not collect anything that
-          identifies you. The two things that do leave your device are described below, so you do not have to take
-          &ldquo;nothing&rdquo; on trust.
+          Gridiron has no accounts, no analytics, no advertising and no tracking, and we keep nothing tied to you. The
+          two things that do leave your device are described below, so you do not have to take &ldquo;nothing&rdquo; on
+          trust.
         </p>
 
         <Section title="Who we are">
@@ -37,8 +37,9 @@ export function PrivacyPage() {
         <Section title="When you look something up">
           The app asks our server for the football figures on the page you are viewing. The server is hosted by
           Render, and like any web server it records standard request logs &mdash; the network address the request came
-          from, the page asked for, and the time &mdash; which Render keeps for a limited period to run and protect the
-          service. We use them for nothing else, and they are not tied to any account, because there are none.
+          from, the page asked for, and the time &mdash; to run and protect the service. Render keeps them for no more
+          than 30 days and then deletes them. We use them for nothing else, and they are not tied to any account,
+          because there are none.
         </Section>
 
         <Section title="Photos and logos">
@@ -71,8 +72,8 @@ export function PrivacyPage() {
         <Section title="Keeping and deleting">
           <p>
             What is on your device stays there until you remove it: delete the app, or on the website clear this
-            site&rsquo;s data in your browser settings. The server&rsquo;s request logs are deleted automatically when
-            Render&rsquo;s retention period ends. Because we hold nothing tied to you, there is no account to close and no
+            site&rsquo;s data in your browser settings. The server&rsquo;s request logs are deleted automatically within
+            30 days. Because we hold nothing tied to you, there is no account to close and no
             consent to revoke &mdash; but if you have a question about any of it, write to <Mail />.
           </p>
         </Section>

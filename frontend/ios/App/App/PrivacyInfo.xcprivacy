@@ -4,7 +4,10 @@
 <dict>
 	<!-- Gridiron is a reference book. There are no accounts, no identifiers and
 	     no analytics: it asks the API for public football statistics and shows
-	     them. Nothing about the person using it is collected or sent. -->
+	     them, and sends nothing about the person using it. The API's host keeps
+	     ordinary request logs for at most 30 days to run the service, not linked
+	     to anyone; the in-app privacy page says so, and IOS.md explains why that
+	     is still "no data collected" under Apple's definition. -->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>
@@ -13,7 +16,7 @@
 	<array/>
 	<!-- No required-reason APIs. The theme, density setting and cached figures
 	     live in the web view's own storage, which WebKit manages; none of the
-	     app's native plugins (app, network, splash screen, status bar) touch
+	     app's native plugins (network, splash screen, status bar) touch
 	     UserDefaults, file timestamps, disk space or system boot time. An
 	     earlier version declared UserDefaults here; that was inaccurate. -->
 	<key>NSPrivacyAccessedAPITypes</key>

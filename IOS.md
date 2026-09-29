@@ -107,9 +107,23 @@ add Source `/*`, Destination `/index.html`, Action **Rewrite** → Save. Then op
 a browser. The same pages are inside the app (footer → Privacy, Support), which Apple also
 requires.
 
-**App Privacy → Data collection** — **"No, we do not collect data from this app."** True: no
-accounts, no identifiers, no analytics. It asks for public football statistics and shows them.
-The API's host keeps ordinary request logs; that is covered in the privacy page.
+**App Privacy → Data collection** — **"No, we do not collect data from this app."** Why that
+is the right answer, so you can enter it with confidence:
+
+- Apple counts data as collected only when it leaves the phone *and is kept in readable form
+  for longer than it takes to answer the request*. Its own example of something that need not
+  be declared is an IP address that arrives with a request and is not kept.
+- The app sends nothing about the person using it: no account, no identifier, no analytics, no
+  advertising. It asks the server for public football statistics and shows them.
+- The one thing kept anywhere is the server host's ordinary request log, which can include the
+  network address a request came from. Render keeps it for at most 30 days to run the service.
+  Nobody uses it to locate, recognise or measure anyone, and it is linked to nothing, because
+  there are no accounts. Apple says to declare a stored IP address by what it is used for, and
+  it is used for none of those things. The in-app privacy page says all of this.
+
+If Apple ever questions it, the answer that describes those logs is **Other Diagnostic Data →
+App Functionality → Not linked to you → Not used for tracking**. That changes the label, not
+the app. The recommendation is still "No data collected".
 
 **Age rating** — **4+**.
 
