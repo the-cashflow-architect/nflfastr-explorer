@@ -20,8 +20,8 @@ on 28 September not to move it to the $7/month plan, so the app is built to cope
   figures saved …"* if the server doesn't answer.
 - **Everything else still waits on the server** the first time it is opened. A reviewer who
   goes straight to a player page on a cold server waits up to a minute, under a message that
-  says the server is waking. That is the remaining risk, and the $7 plan is still the only
-  thing that removes it.
+  says it can take that long if the server was asleep. That is the remaining risk, and the $7
+  plan is still the only thing that removes it.
 
 ---
 

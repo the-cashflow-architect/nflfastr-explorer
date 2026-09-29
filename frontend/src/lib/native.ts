@@ -90,7 +90,34 @@ export const canDownload = !isNative
  * decided on 29 September 2026 that the app shows the abbreviation or the
  * initials instead. The website keeps the images.
  */
-export function leagueImage(src: string | null | undefined): string | null {
+export function leagueImage(src: string | null | undefined, size: number): string | null {
   if (!src || isNative) return null
-  return src
+  return atWidth(src, size)
+}
+
+/**
+ * An NFL headshot at the size it is drawn, not the full original.
+ *
+ * The NFL's image CDN (Cloudinary) sends the original unless the address names
+ * a width: 0.4–1 MB per 24px search avatar in a browser, every keystroke's
+ * results over again. Four times the drawn size covers a 3x screen; measured,
+ * one headshot went from 444,830 bytes to 2,650 at w_96. Other hosts are left
+ * as they are.
+ */
+const NFL_CDN = /^(https:\/\/static\.www\.nfl\.com\/image\/upload\/)(.+)$/
+
+function atWidth(src: string, size: number): string {
+  const match = NFL_CDN.exec(src)
+  if (!match) return src
+  const [, head, rest] = match
+  const width = `w_${Math.round(size * 4)}`
+  const slash = rest.indexOf('/')
+  const first = slash === -1 ? '' : rest.slice(0, slash)
+  const tokens = first.split(',')
+  // The first segment is a transformation (f_auto,q_auto) or already the path.
+  if (first && tokens.every((token) => /^[a-z]{1,3}_./.test(token))) {
+    if (tokens.some((token) => token.startsWith('w_'))) return src
+    return `${head}${first},${width}${rest.slice(slash)}`
+  }
+  return `${head}${width}/${rest}`
 }

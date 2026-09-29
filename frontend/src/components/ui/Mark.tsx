@@ -33,7 +33,7 @@ export function Mark({
   const [failed, setFailed] = useState(false)
   const shape = rounded ? 'rounded-full' : 'rounded'
   const style = { width: size, height: size }
-  const image = leagueImage(src)
+  const image = leagueImage(src, size)
 
   if (!image || failed) {
     return (

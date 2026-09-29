@@ -87,7 +87,7 @@ export function PlayerHeadshot({
 }) {
   const [broken, setBroken] = useState(false)
   // In the iOS app there is never a photo to load: see leagueImage.
-  const image = leagueImage(url)
+  const image = leagueImage(url, size)
   if (!image || broken) {
     // No headshot is a gap, not a reason to draw a silhouette that implies one.
     return (

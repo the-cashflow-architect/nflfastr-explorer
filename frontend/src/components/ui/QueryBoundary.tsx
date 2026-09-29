@@ -8,7 +8,8 @@ import { ApiError, NotSavedOfflineError } from '../../api/client'
  * The API sleeps between visits and takes the better part of a minute to wake —
  * measured at 43 seconds from cold, against 0.7 warm. An unexplained "Loading…"
  * for that long does not read as a slow server; it reads as a broken product,
- * and the visitor closes it. Saying what is happening costs nothing and is true.
+ * and the visitor closes it. The page cannot tell a waking server from a slow
+ * answer, so the note says what may be happening rather than claiming it is.
  */
 const WAKING_AFTER_MS = 4000
 
@@ -99,10 +100,7 @@ function Waiting() {
     <div className="px-1 py-6 text-[13px] text-ink-3">
       <p>Loading…</p>
       {waking ? (
-        <p className="mt-1 max-w-prose">
-          The server sleeps when nobody is using it, and takes about a minute to wake.
-          This only happens on the first request.
-        </p>
+        <p className="mt-1 max-w-prose">Still loading. If the server was asleep, this can take up to a minute.</p>
       ) : null}
     </div>
   )

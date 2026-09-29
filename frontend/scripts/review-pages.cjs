@@ -110,6 +110,57 @@ async function checkInteractions(context, report) {
 
   await checkHomeSearchCloses(context, report)
   await checkRefusedSave(context, report)
+  await checkHeadshotSize(context, report)
+}
+
+/**
+ * A 24px search avatar must not download a full-size NFL headshot.
+ *
+ * The NFL's image CDN sends the original, 0.4-1 MB in a browser, unless the
+ * address names a width, and search refetches on every prefix typed. The
+ * fixture's photos point nowhere real, so this page gets them rewritten to the
+ * CDN's real address shape and checks the <img> the palette renders.
+ */
+async function checkHeadshotSize(context, report) {
+  const page = await context.newPage()
+  const errors = []
+  await page.route(/\/api\/search/, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.text()).replace(
+      /https:\/\/example\.invalid\/(\d+)\.png/g,
+      'https://static.www.nfl.com/image/upload/f_auto,q_auto/league/fixture$1',
+    )
+    await route.fulfill({ response, body })
+  })
+  // A stand-in picture: a failed one would fall back to initials and leave no <img> to check.
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
+  await page.route(/static\.www\.nfl\.com/, (route) => route.fulfill({ contentType: 'image/png', body: pixel }))
+  let sources = []
+  try {
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 45000 })
+    await page.click('#home-search')
+    await page.type('[role="dialog"] input', 'player', { delay: 40 })
+    await page.waitForTimeout(2000)
+    sources = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="dialog"] img')].map((img) => img.getAttribute('src')),
+    )
+    const nfl = sources.filter((src) => src && src.includes('static.www.nfl.com'))
+    if (!nfl.length) errors.push('HEADSHOTS no NFL headshot was rendered in search results to check')
+    const full = nfl.filter((src) => !/[/,]w_\d+/.test(src))
+    if (full.length) errors.push(`HEADSHOTS ${full.length} search avatar(s) ask for the full-size image, e.g. ${full[0]}`)
+  } catch (e) {
+    errors.push('HEADSHOTS ' + String(e.message).slice(0, 160))
+  }
+  report.push({
+    name: 'search-headshot-size',
+    route: '(search avatars ask for a sized image)',
+    chars: errors.length ? 0 : 1000,
+    words: 0,
+    errors: [...new Set(errors)].slice(0, 4),
+    failed: [],
+    snippet: errors.length ? 'full-size headshots' : `${sources.length} avatar(s), all sized`,
+  })
+  await page.close()
 }
 
 /**
