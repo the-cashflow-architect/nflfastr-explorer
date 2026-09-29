@@ -229,7 +229,8 @@ a:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px max(14px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
   background: var(--c-sunken);
   border-top: 1px solid var(--c-line-strong);
   color: var(--c-text-secondary);
@@ -256,6 +257,22 @@ body:has(.freshness-banner) {
    is sticky at the very top, so it is the surface that has to clear them. */
 .app-header {
   padding-top: env(safe-area-inset-top);
+}
+
+/* Turned sideways, the notch and the Dynamic Island sit at the left or right
+   edge, and viewport-fit=cover lets the page run under them. Wide stat tables
+   are why landscape is allowed at all, so the shell's gutters clear them:
+   the same 16px (24px from 640px) as px-4 sm:px-6, or the inset if wider. */
+.safe-x {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+@media (min-width: 640px) {
+  .safe-x {
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
+  }
 }
 
 /* The home indicator sits over the last line of the page. */

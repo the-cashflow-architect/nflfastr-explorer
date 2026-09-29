@@ -24,7 +24,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="app-header sticky top-0 z-40 border-b border-line bg-page/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1280px] items-center gap-4 px-4 py-2.5 sm:px-6">
+        <div className="safe-x mx-auto flex max-w-[1280px] items-center gap-4 px-4 py-2.5 sm:px-6">
           <NavLink to="/" className="shrink-0 text-[15px] font-semibold tracking-tight no-underline">
             Gridiron
           </NavLink>
@@ -57,7 +57,7 @@ export function AppShell() {
             <ThemeToggle />
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto border-t border-line px-4 py-1.5 md:hidden">
+        <nav className="safe-x flex gap-1 overflow-x-auto border-t border-line px-4 py-1.5 md:hidden">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -74,7 +74,7 @@ export function AppShell() {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-4 sm:px-6">
+      <main className="safe-x mx-auto w-full max-w-[1280px] flex-1 px-4 py-4 sm:px-6">
         <Breadcrumb />
         {/* A page that throws shows a message; the shell and the nav survive. */}
         <ErrorBoundary label="page">
@@ -82,7 +82,7 @@ export function AppShell() {
         </ErrorBoundary>
       </main>
 
-      <footer className="app-footer mt-8 border-t border-line px-4 py-4 text-[11px] leading-4 text-ink-3 sm:px-6">
+      <footer className="app-footer safe-x mt-8 border-t border-line px-4 py-4 text-[11px] leading-4 text-ink-3 sm:px-6">
         <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-3 gap-y-1">
           <ErrorBoundary label="coverage">
             <CoverageLine />
