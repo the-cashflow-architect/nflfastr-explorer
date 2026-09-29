@@ -19,13 +19,21 @@
  * copy, and this checks what the copy is for.
  *
  * Run: BASE=http://127.0.0.1:4173 node scripts/review-seed.mjs
- *      (a production build carrying public/seed-cache.json, served at BASE)
+ *      (a production build carrying public/seed-cache.json, served at BASE,
+ *      and the fixture API on :8000 — see IOS.md, "Verifying it locally")
+ *
+ * Live answers come from the local fixture API, not whichever API the build
+ * points at. The build points at the production API, which (rightly) sends
+ * CORS headers only to the website's own address — so a request passed
+ * straight through from 127.0.0.1 was refused, the "waking" case could never
+ * clear its notice, and this review could not pass as shipped.
  */
 import { chromium, devices } from 'playwright'
 import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:4173'
+const API = process.env.API || 'http://127.0.0.1:8000'
 const RAW = readFileSync(join(process.cwd(), 'public', 'seed-cache.json'), 'utf8')
 
 /**
@@ -66,6 +74,17 @@ async function fresh(label, routeApi, seed = SEED) {
   return { ctx, page, errors, label }
 }
 
+/** A real answer from the fixture API, with the header a browser needs to accept it. */
+async function answer(route) {
+  const url = new URL(route.request().url())
+  try {
+    const response = await route.fetch({ url: `${API}${url.pathname}${url.search}` })
+    await route.fulfill({ response, headers: { ...response.headers(), 'access-control-allow-origin': '*' } })
+  } catch {
+    await route.abort()
+  }
+}
+
 const text = (page) => page.evaluate(() => document.body.innerText)
 const banner = (page) => page.evaluate(() => document.querySelector('.freshness-banner')?.textContent ?? null)
 const homeRendered = (t) => /Super Bowl|Standings/.test(t)
@@ -89,7 +108,7 @@ const homeRendered = (t) => /Super Bowl|Standings/.test(t)
 {
   const { ctx, page, errors, label } = await fresh('waking', async (route) => {
     await new Promise((r) => setTimeout(r, 5000))
-    await route.continue()
+    await answer(route)
   })
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1500)

@@ -23,14 +23,23 @@ const BASE = process.env.BASE || 'http://127.0.0.1:5173'
 const OUT = process.env.OUT || 'review-shots'
 const ONLY = process.env.ONLY
 
+/**
+ * Ids from the fixture database (backend/tests/factories.py), which is what
+ * this runs against: players are '00-00' + a five-digit index, games are
+ * '{season}_{week}_{away}_{home}' over the fixture's eight clubs. These once
+ * named real players and games (Mahomes, 2024_01_BAL_KC), so against the
+ * documented fixture nine routes answered "We have no record of that" and the
+ * sweep could not pass.
+ */
 const ROUTES = [
   ['home', '/'],
   ['players-index', '/players'],
-  ['player-hub', '/players/00-0033873/patrick-mahomes'],
-  ['player-gamelog', '/players/00-0033873/gamelog?season=2024'],
-  ['player-splits', '/players/00-0033873/splits?season=2024'],
-  ['player-advanced', '/players/00-0033873/advanced?season=2024'],
-  ['player-lineman', '/players/00-0031852'],
+  ['player-hub', '/players/00-0000000/player-0'],
+  ['player-gamelog', '/players/00-0000000/gamelog?season=2024'],
+  ['player-splits', '/players/00-0000000/splits?season=2024'],
+  ['player-advanced', '/players/00-0000000/advanced?season=2024'],
+  // No recent games in the fixture: blocks with no data must be absent, not empty.
+  ['player-sparse', '/players/00-0000005'],
   ['teams-index', '/teams?season=2024'],
   ['teams-index-2001', '/teams?season=2001'],
   ['franchise', '/teams/KC'],
@@ -38,9 +47,10 @@ const ROUTES = [
   ['team-season', '/teams/KC/2024'],
   ['team-season-2001', '/teams/LA/2001'],
   ['team-roster', '/teams/KC/2024/roster'],
-  ['game', '/games/2024_01_BAL_KC'],
-  ['game-old', '/games/2001_01_CHI_BAL'],
-  ['game-future', '/games/2026_01_NE_SEA'],
+  ['game', '/games/2024_01_BUF_KC'],
+  ['game-old', '/games/2001_01_CIN_BAL'],
+  // Week 4 of the fixture's 2024 is scheduled but unplayed.
+  ['game-future', '/games/2024_04_KC_BUF'],
   ['seasons-index', '/seasons'],
   ['season-hub', '/seasons/2024'],
   ['season-hub-2001', '/seasons/2001'],
@@ -53,7 +63,7 @@ const ROUTES = [
   ['draft-index', '/draft'],
   ['draft-class', '/draft/2017'],
   ['finder', '/finder'],
-  ['compare', '/compare?players=00-0033873,00-0036355'],
+  ['compare', '/compare?players=00-0000000,00-0000005'],
   ['glossary', '/glossary'],
   ['about-data', '/about/data'],
   ['about-privacy', '/about/privacy'],
@@ -79,7 +89,8 @@ async function checkInteractions(context, report) {
     await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 45000 })
     await page.keyboard.press('Control+k')
     await page.waitForSelector('[role="dialog"] input', { timeout: 10000 })
-    await page.type('[role="dialog"] input', 'mahom', { delay: 40 })
+    // Every fixture player is called "Player N".
+    await page.type('[role="dialog"] input', 'player', { delay: 40 })
     await page.waitForTimeout(2500)
     results = await page.locator('[role="dialog"] button').count()
     await page.screenshot({ path: path.join(OUT, 'interaction-search.png') })
@@ -88,7 +99,7 @@ async function checkInteractions(context, report) {
   }
   report.push({
     name: 'search-palette',
-    route: '(Cmd+K, type "mahom")',
+    route: '(Cmd+K, type "player")',
     chars: results * 100,
     words: results,
     errors: [...new Set(errors)].slice(0, 4),
