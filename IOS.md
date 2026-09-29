@@ -173,8 +173,14 @@ cd frontend && npm run review:seed                         # the bundled first-l
 ```
 
 `review:native` runs the built app against a stand-in for the iPhone's native layer and fails
-if the launch screen is never dismissed, if an export button is offered, or if "copy a link"
-copies an address nobody can open. It failed on all of those against the earlier code.
+if the launch screen is never dismissed, if an export button is offered, if "copy a link"
+copies an address nobody can open or says nothing, if pinch-zoom is off or a field would make
+iOS zoom, if any NFL logo or photo is asked for, if one page's error sticks to the next, or if
+the bundled figures would not open a fresh install a month after the build.
+
+`review:seed` holds the saved-figures rules: they are always dated, they survive a failed
+refresh, a page never saved says so offline (as does search), the bar never covers the footer,
+a copy saved against another API shape is dropped, and coming back after days refreshes them.
 
 The browser reviews need an API with data behind it:
 
@@ -182,10 +188,19 @@ The browser reviews need an API with data behind it:
 cd backend
 python -m scripts.build_fixture_db /tmp/fixture.duckdb     # ~30s, no network
 DUCKDB_PATH=/tmp/fixture.duckdb DUCKDB_MEMORY_LIMIT=1GB \
-  CORS_ORIGINS=http://127.0.0.1:5173 uvicorn app.main:app --port 8000
+  CORS_ORIGINS=http://127.0.0.1:5173,http://127.0.0.1:4173 uvicorn app.main:app --port 8000
 ```
 
 That database is built by the real loader over locally generated files covering 2001 and 2024.
 Its numbers are generated, not real — for checking that pages render, never for figures.
+
+Then, in `frontend/`:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 npx vite --port 5173 --host 127.0.0.1   # npm run review uses this
+VITE_API_BASE_URL=http://127.0.0.1:8000 node scripts/build-seed-cache.mjs     # a seed from the fixture
+npm run build                                                               # npm run review:native serves this
+npx vite preview --port 4173 --host 127.0.0.1                               # npm run review:seed uses this
+```
 
 **Not checked: the actual iOS build**, which needs Xcode on macOS.
