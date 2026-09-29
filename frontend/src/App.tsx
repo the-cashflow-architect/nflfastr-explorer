@@ -50,7 +50,7 @@ export default function App() {
       persistOptions={{
         persister,
         maxAge: CACHE_MAX_AGE,
-        // Reference pages only, and never a failure — see shouldPersist.
+        // Reference pages with data, even when their last refresh failed — see shouldPersist.
         dehydrateOptions: { shouldDehydrateQuery: shouldPersist },
       }}
     >

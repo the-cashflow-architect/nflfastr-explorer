@@ -59,13 +59,20 @@ export const SESSION_STARTED_AT = Date.now()
  * Reference pages, yes. Not the ad-hoc queries: every prefix typed into search,
  * every Finder filter combination and result page. Those are large, never
  * revisited, and would push the pages people do come back to out of a storage
- * budget of a few megabytes. Failures are never kept either — a cached error
- * would greet the next launch with a problem the server has stopped having.
+ * budget of a few megabytes.
+ *
+ * Anything with data is kept, whatever became of its last refresh. This once
+ * kept only status 'success' — but a refresh that fails with data on screen
+ * flips a query to 'error' and keeps the data, so one run of failed requests
+ * wrote a snapshot with nothing in it, the bundled seed included (seedIfEmpty
+ * never refills a key that exists), and the next launch had nothing to show.
+ * That is the subway case this cache exists for. A query with only an error
+ * and no data is still never kept.
  */
 const EPHEMERAL = new Set(['search', 'filter-options', 'finder'])
 
 export function shouldPersist(query: Query): boolean {
-  return query.state.status === 'success' && !EPHEMERAL.has(String(query.queryKey[0]))
+  return query.state.data !== undefined && !EPHEMERAL.has(String(query.queryKey[0]))
 }
 
 /**

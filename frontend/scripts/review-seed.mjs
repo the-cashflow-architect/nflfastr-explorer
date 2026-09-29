@@ -13,6 +13,8 @@
  *   server waking        the page renders at once, says it is showing saved
  *                        figures while the latest load, and the notice goes
  *                        away once they have
+ *   refresh failed       the saved copy survives the failure, so the next two
+ *                        launches still open on dated figures
  *
  * It writes the snapshot into storage directly rather than going through
  * seedIfEmpty(), which only runs on a device; that function's job is one guarded
@@ -140,6 +142,35 @@ const homeRendered = (t) => /Super Bowl|Standings/.test(t)
   if (b) problems.push(`${label}: flagged an answer still inside the one-hour freshness window (${JSON.stringify(b)})`)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   console.log(`  in-window     home rendered=${homeRendered(t)}  banner=${JSON.stringify(b)}`)
+  await ctx.close()
+}
+
+/* ---- 4. a refresh fails, and the app is opened again ----
+   One run of failed requests once wiped the saved copy. A query whose refresh
+   fails keeps its data but flips to 'error', and only 'success' was saved, so
+   the snapshot written after the failure was empty: the next launch said
+   "Request failed (502)" with nothing on screen, and on a device the bundled
+   seed was gone for good, since seedIfEmpty never refills a key that exists. */
+{
+  const failing = (route) =>
+    route.fulfill({ status: 502, headers: { 'access-control-allow-origin': '*' }, body: 'Bad gateway' })
+  const { ctx, page, errors, label } = await fresh('relaunch-after-failure', failing)
+  const seen = []
+  for (const launch of [1, 2, 3]) {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+    // The failed refresh, its one retry, and the persister's throttled write.
+    await page.waitForTimeout(6000)
+    const t = await text(page)
+    const b = await banner(page)
+    const kept = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? '{}')?.clientState?.queries?.length ?? 0, CACHE_KEY)
+    seen.push(`launch ${launch}: home=${homeRendered(t)} saved=${kept}`)
+    if (!homeRendered(t)) problems.push(`${label}: launch ${launch} showed no figures — a failed refresh emptied the saved copy`)
+    if (!b || !/saved/.test(b)) problems.push(`${label}: launch ${launch} showed saved figures without dating them (banner: ${JSON.stringify(b)})`)
+    if (!kept) problems.push(`${label}: after launch ${launch} the saved copy on the device holds nothing`)
+  }
+  if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
+  await page.screenshot({ path: join(SHOTS, 'seed-relaunch-after-failure.png') })
+  console.log(`  relaunch      ${seen.join('  ')}`)
   await ctx.close()
 }
 
