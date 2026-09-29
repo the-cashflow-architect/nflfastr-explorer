@@ -1,7 +1,6 @@
 # Putting Gridiron on the App Store
 
-Everything that can be done without a Mac is done, committed and pushed to the
-branch `claude/eager-volta-uozifl`. Gridiron is still the riskiest of the four
+Everything that can be done without a Mac is done, committed and on `main`. Gridiron is still the riskiest of the four
 apps — read the first two sections before spending time on the rest.
 
 ---
@@ -57,15 +56,14 @@ cannot do. **Submit this one last**, after the other three have been through rev
 ## Steps on the Mac
 
 ```bash
-git clone -b claude/eager-volta-uozifl https://github.com/the-cashflow-architect/nflfastr-explorer.git
+git clone https://github.com/the-cashflow-architect/nflfastr-explorer.git
 cd nflfastr-explorer/frontend
 npm install
 npm run ios
 npm run ios:open
 ```
 
-The `-b claude/eager-volta-uozifl` matters: `main` does not have the iOS project until this
-branch is merged. `npm run ios` can take a couple of minutes the first time: it waits for the
+`npm run ios` can take a couple of minutes the first time: it waits for the
 server to wake so it can bundle the home page's figures. If it stops saying it could not
 reach the API, run it again.
 
