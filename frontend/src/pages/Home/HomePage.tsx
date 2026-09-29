@@ -86,6 +86,8 @@ export function HomePage() {
 
 function SearchHero() {
   const [open, setOpen] = useState(false)
+  // The first letter typed into the focused hero, handed on so it is not lost.
+  const [typed, setTyped] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -93,6 +95,11 @@ function SearchHero() {
     // over half the page before a visitor has decided they want it.
     if (window.matchMedia('(min-width: 768px)').matches) inputRef.current?.focus()
   }, [])
+
+  const openWith = (text: string) => {
+    setTyped(text)
+    setOpen(true)
+  }
 
   return (
     <div className="py-10 text-center sm:py-14">
@@ -107,14 +114,28 @@ function SearchHero() {
             ref={inputRef}
             type="text"
             readOnly
-            onFocus={() => setOpen(true)}
-            onClick={() => setOpen(true)}
+            // Opens on a click, Enter, Space or the first letter typed — never
+            // on focus. The palette hands focus back to this input when it
+            // closes, so opening on focus reopened it the instant it closed:
+            // Escape and a tap outside did nothing, and at 768px and up, where
+            // the input is focused on load, it was open before anyone touched it.
+            onClick={() => openWith('')}
+            onKeyDown={(event) => {
+              if (event.metaKey || event.ctrlKey || event.altKey) return
+              if (event.key === 'Enter' || event.key === ' ' || event.key === '/') {
+                event.preventDefault()
+                openWith('')
+              } else if (event.key.length === 1) {
+                event.preventDefault()
+                openWith(event.key)
+              }
+            }}
             placeholder="Find any player, team, or game"
             className="motion-state w-full cursor-pointer rounded-xl border border-line bg-raised py-4 pl-12 pr-4 text-[16px] outline-none placeholder:text-ink-3 focus:border-accent focus:ring-2 focus:ring-accent/30 sm:text-[18px]"
           />
         </div>
       </div>
-      {open ? <SearchPalette onClose={() => setOpen(false)} /> : null}
+      {open ? <SearchPalette initialQuery={typed} onClose={() => setOpen(false)} /> : null}
     </div>
   )
 }

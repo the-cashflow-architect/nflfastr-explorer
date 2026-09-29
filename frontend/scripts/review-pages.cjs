@@ -96,6 +96,58 @@ async function checkInteractions(context, report) {
     snippet: `${results} result row(s) rendered`,
   })
   await page.close()
+
+  await checkHomeSearchCloses(context, report)
+}
+
+/**
+ * The home page's search box must let go of a visitor.
+ *
+ * It once trapped them: the hero input opened the palette on focus, the palette
+ * hands focus back to whatever had it when it closes, and so Escape or a tap
+ * outside reopened it in the same millisecond. At 768px and wider the input is
+ * focused on load, so the palette was also up before anyone touched it — on
+ * the first screen an iPad App Review tester sees. Only a browser can see this.
+ */
+async function checkHomeSearchCloses(context, report) {
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (e) => errors.push('PAGEERROR ' + String(e.message).slice(0, 200)))
+  const dialogs = () => page.locator('[role="dialog"]').count()
+  try {
+    await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 45000 })
+    await page.waitForTimeout(300)
+    if (await dialogs()) errors.push('HOME the search palette opened by itself on load')
+    for (const [how, close] of [
+      ['Escape', () => page.keyboard.press('Escape')],
+      ['a tap outside it', () => page.mouse.click(8, 8)],
+    ]) {
+      if (!(await dialogs())) {
+        await page.click('#home-search')
+        await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+      }
+      await close()
+      await page.waitForTimeout(300)
+      if (await dialogs()) errors.push(`HOME the search palette is still open after ${how}`)
+    }
+    // Focus is back on the hero; typing into it should still search, not vanish.
+    await page.focus('#home-search')
+    await page.keyboard.type('pl', { delay: 60 })
+    const value = await page.locator('[role="dialog"] input').inputValue({ timeout: 5000 }).catch(() => null)
+    if (value !== 'pl') errors.push(`HOME typing into the focused search box reached the palette as ${JSON.stringify(value)}, not "pl"`)
+  } catch (e) {
+    errors.push('HOME-SEARCH ' + String(e.message).slice(0, 160))
+  }
+  report.push({
+    name: 'home-search-closes',
+    route: '(Home: open search, Escape, tap outside)',
+    chars: errors.length ? 0 : 1000,
+    words: 0,
+    errors: [...new Set(errors)].slice(0, 4),
+    failed: [],
+    snippet: errors.length ? 'palette would not close' : 'palette closes on Escape and on a tap outside',
+  })
+  await page.close()
 }
 
 ;(async () => {

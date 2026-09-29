@@ -87,8 +87,8 @@ export function SearchLauncher() {
   )
 }
 
-export function SearchPalette({ onClose }: { onClose: () => void }) {
-  const [query, setQuery] = useState('')
+export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery)
   const [active, setActive] = useState(0)
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
