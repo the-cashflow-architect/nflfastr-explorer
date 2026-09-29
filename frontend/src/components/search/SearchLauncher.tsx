@@ -3,7 +3,7 @@ import { Search } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { searchQuery, type SearchItem } from '../../api/endpoints'
+import { searchQuery, useCoverageQuery, type SearchItem } from '../../api/endpoints'
 import { Mark } from '../ui/Mark'
 
 /**
@@ -105,6 +105,8 @@ export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => v
   }, [])
 
   const { data, error, isFetching, isPaused } = useQuery(searchQuery(query))
+  // The search floor is the stats window, read from /api/coverage like every other year on the site.
+  const playersFrom = useCoverageQuery().data?.coverage_windows?.stats?.first_season
 
   const searching = query.trim().length >= 2
   const recent = searching ? [] : readRecent()
@@ -175,7 +177,7 @@ export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => v
             <p className="px-3 py-4 text-[13px] text-negative">No connection. Search needs the server.</p>
           ) : searching && !flat.length && !isFetching ? (
             <p className="px-3 py-4 text-[13px] text-ink-3">
-              Nothing matches “{query}”. Players are searchable from 1999 onward.
+              Nothing matches “{query}”.{playersFrom ? ` Players are searchable from ${playersFrom} onward.` : null}
             </p>
           ) : null}
 

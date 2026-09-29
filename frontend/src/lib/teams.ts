@@ -34,8 +34,14 @@ export function labelInSeason(abbr: string, season: number, currentName: string)
   return historical && season <= historical.until ? historical.name : currentName
 }
 
-/** Whether a team existed in a season, so we never link to an empty page. */
-export function existedIn(abbr: string, season: number): boolean {
-  if (abbr === 'HOU') return season >= 2002
-  return season >= 1999
+/**
+ * Whether a team existed in a season we hold, so we never link to an empty page.
+ *
+ * `firstSeason` is the stats window's first season from /api/coverage — never
+ * a year typed here, or this goes on answering for a window the database no
+ * longer has. Houston's 2002 is a fact about the franchise, not our coverage.
+ */
+export function existedIn(abbr: string, season: number, firstSeason: number): boolean {
+  if (abbr === 'HOU' && season < 2002) return false
+  return season >= firstSeason
 }

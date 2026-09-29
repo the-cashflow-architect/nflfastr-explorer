@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { chartColors } from './primitives'
+import { useCoverageQuery } from '../../api/endpoints'
 
 /**
  * The hero of a game page: home win probability from kickoff to final whistle.
@@ -37,6 +38,7 @@ export function WinProbabilityChart({
   onSelectPlay?: (playId: number) => void
 }) {
   const colors = chartColors()
+  const playsFrom = useCoverageQuery().data?.coverage_windows?.stats?.first_season
 
   const data = useMemo(
     () => points.map((p) => ({ ...p, elapsed: 3600 - p.seconds_remaining, wp: p.home_wp * 100 })),
@@ -55,7 +57,9 @@ export function WinProbabilityChart({
   if (data.length < 2) {
     return (
       <p className="py-6 text-[13px] text-ink-3">
-        Win probability needs play-level data, which we hold from 1999 onward.
+        {playsFrom
+          ? `Win probability needs play-level data, which we hold from ${playsFrom} onward.`
+          : 'Win probability needs play-level data, which we do not hold for this game.'}
       </p>
     )
   }

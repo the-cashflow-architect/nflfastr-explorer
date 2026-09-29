@@ -1,6 +1,6 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useMemo } from 'react'
-import { useDraftClass, type DraftClass } from '../../api/endpoints'
+import { useCoverageQuery, useDraftClass, type DraftClass } from '../../api/endpoints'
 import { DataTable, type Column } from '../../components/ui/DataTable'
 import { downloadCsv } from '../../components/ui/downloadCsv'
 import { ComputedByUs } from '../../components/ui/Honesty'
@@ -84,6 +84,8 @@ function RoundNav({ rounds, picks }: { rounds: number[]; picks: Pick[] }) {
 }
 
 function Class({ data, team, onTeam }: { data: DraftClass; team: string | null; onTeam: (value: string | null) => void }) {
+  // The stat window the career columns are contrasted with, from /api/coverage.
+  const statsFrom = useCoverageQuery().data?.coverage_windows?.stats?.first_season
   const picks = useMemo(() => (team ? data.picks.filter((pick) => pick.team === team) : data.picks), [data.picks, team])
 
   // The first pick of each round in the *unfiltered* board gets the anchor id,
@@ -132,7 +134,7 @@ function Class({ data, team, onTeam }: { data: DraftClass; team: string | null; 
       >
         <DataTable
           rows={picks}
-          columns={boardColumns()}
+          columns={boardColumns(statsFrom)}
           rowKey={(pick) => `${pick.round}-${pick.pick}`}
           rowId={(pick) => roundAnchors.get(pick)}
           emptyMessage={team ? `No pick by ${team} in this class.` : 'No picks on file for this class.'}
@@ -221,7 +223,8 @@ function TeamChips({
   )
 }
 
-function boardColumns(): Column<Pick>[] {
+function boardColumns(statsFrom: number | undefined): Column<Pick>[] {
+  const ours = `our ${statsFrom ?? 'modern-era'} stat window`
   return [
     { id: 'round', header: 'Rd', width: '3rem', align: 'right', sortValue: (row) => row.round, render: (row) => row.round },
     { id: 'pick', header: 'Pick', width: '3.5rem', align: 'right', sortValue: (row) => row.pick, render: (row) => row.pick },
@@ -260,7 +263,7 @@ function boardColumns(): Column<Pick>[] {
       header: 'Last season',
       align: 'right',
       width: '6rem',
-      help: "PFR's own record of the last season played, from the draft file — not our 1999 stat window.",
+      help: `PFR's own record of the last season played, from the draft file — not ${ours}.`,
       sortValue: (row) => row.last_season_played ?? null,
       render: (row) => (row.last_season_played ? String(row.last_season_played) : em()),
     },
@@ -268,7 +271,7 @@ function boardColumns(): Column<Pick>[] {
       id: 'games',
       header: 'G',
       align: 'right',
-      help: 'Career games, as PFR recorded the full career — not our 1999 stat window.',
+      help: `Career games, as PFR recorded the full career — not ${ours}.`,
       sortValue: (row) => row.games ?? null,
       render: (row) => num(row.games ?? null, 0),
     },
