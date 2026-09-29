@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { onlineManager, useQueryClient } from '@tanstack/react-query'
 import { Network } from '@capacitor/network'
 import { RefreshCw, WifiOff } from 'lucide-react'
@@ -73,9 +73,37 @@ export function FreshnessBanner() {
 
   const freshness = read(summary, online)
   if (freshness.kind === 'current') return null
+  return <Bar freshness={freshness} />
+}
+
+/**
+ * The bar itself, which also makes room for itself.
+ *
+ * It is fixed over the bottom of the page, and without room made for it it
+ * covered the footer — Privacy, Support and the nflverse credit could not be
+ * tapped in exactly the states (offline, updating, a failed refresh) in which a
+ * reviewer goes looking for the privacy policy. Its height is measured rather
+ * than assumed: on a phone the sentence wraps to two or three lines.
+ */
+function Bar({ freshness }: { freshness: Exclude<Freshness, { kind: 'current' }> }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const bar = ref.current
+    if (!bar) return
+    const root = document.documentElement
+    const measure = () => root.style.setProperty('--freshness-height', `${bar.offsetHeight}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(bar)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--freshness-height')
+    }
+  }, [])
 
   return (
-    <div className="freshness-banner" role="status" aria-live="polite">
+    <div ref={ref} className="freshness-banner" role="status" aria-live="polite">
       {freshness.kind === 'offline' ? (
         <WifiOff size={14} aria-hidden="true" />
       ) : (

@@ -213,6 +213,20 @@ const flashedEmpty = (page) => page.evaluate(() => window.__falseEmpty === true)
     if (!b || !/not been saved/.test(b)) problems.push(`${label}: offline on ${path}, the bar did not say the page is not saved (banner: ${JSON.stringify(b)})`)
   }
   await page.screenshot({ path: join(SHOTS, 'seed-offline-unsaved.png') })
+  // The bar is fixed over the bottom of the page, and once covered the footer:
+  // Privacy and Support could not be tapped while it showed.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await page.waitForTimeout(300)
+  const covered = await page.evaluate(() =>
+    [...document.querySelectorAll('footer a')]
+      .filter((a) => {
+        const r = a.getClientRects()[0] // the first line, for a link that wraps
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        return !hit || !a.contains(hit)
+      })
+      .map((a) => a.textContent.trim()),
+  )
+  if (covered.length) problems.push(`${label}: with the bar up, the footer's ${covered.join(', ')} cannot be tapped`)
   await page.keyboard.press('Control+k')
   await page.waitForSelector('[role="dialog"] input', { timeout: 5000 })
   await page.type('[role="dialog"] input', 'player', { delay: 40 })

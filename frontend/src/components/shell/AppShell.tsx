@@ -82,7 +82,7 @@ export function AppShell() {
         </ErrorBoundary>
       </main>
 
-      <footer className="mt-8 border-t border-line px-4 py-4 text-[11px] leading-4 text-ink-3 sm:px-6">
+      <footer className="app-footer mt-8 border-t border-line px-4 py-4 text-[11px] leading-4 text-ink-3 sm:px-6">
         <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-3 gap-y-1">
           <ErrorBoundary label="coverage">
             <CoverageLine />

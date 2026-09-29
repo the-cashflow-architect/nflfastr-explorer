@@ -238,6 +238,13 @@ a:hover {
   text-align: center;
 }
 
+/* Room at the end of the page for the bar, so it never sits over the footer.
+   FreshnessBanner measures itself into --freshness-height; the fallback covers
+   the frame before it has. */
+body:has(.freshness-banner) {
+  padding-bottom: var(--freshness-height, calc(64px + env(safe-area-inset-bottom)));
+}
+
 .freshness-banner time {
   color: var(--c-text);
   font-variant-numeric: tabular-nums;
@@ -249,6 +256,11 @@ a:hover {
    is sticky at the very top, so it is the surface that has to clear them. */
 .app-header {
   padding-top: env(safe-area-inset-top);
+}
+
+/* The home indicator sits over the last line of the page. */
+.app-footer {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 /* An installed app should not rubber-band past its own edges or flash blue on
