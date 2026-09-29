@@ -5,6 +5,15 @@ import { RefreshCw, WifiOff } from 'lucide-react'
 import { SESSION_STARTED_AT } from '../../lib/offline'
 
 /**
+ * Past this age a figure being refreshed is labelled, even if it arrived in
+ * this session: an app left in the background for three days, or a tab left
+ * open, holds figures that old, and the refresh can take a minute while the
+ * server wakes. The same hour as the reference pages' staleTime, so a figure
+ * young enough not to be refetched is never flagged.
+ */
+const AGED_AFTER = 60 * 60 * 1000
+
+/**
  * How old are the figures on screen, when they are not from just now?
  *
  * Saved answers let a page show something at once instead of waiting 43
@@ -54,7 +63,8 @@ export function FreshnessBanner() {
         continue
       }
       oldestShown = Math.min(oldestShown, state.dataUpdatedAt)
-      const fromDisk = state.dataUpdatedAt < SESSION_STARTED_AT
+      // From disk, or held so long this session that it might as well be.
+      const notFresh = state.dataUpdatedAt < SESSION_STARTED_AT || Date.now() - state.dataUpdatedAt > AGED_AFTER
       // A refresh that failed while the old figures stayed up. Pages keep
       // showing data through a failure (see useReferenceQuery), so this is the
       // one place the failure is reported — whether the data came from disk or
@@ -63,7 +73,7 @@ export function FreshnessBanner() {
       if (refreshFailed) {
         failed = true
         oldestFlagged = Math.min(oldestFlagged, state.dataUpdatedAt)
-      } else if (fromDisk && state.fetchStatus !== 'idle') {
+      } else if (notFresh && state.fetchStatus !== 'idle') {
         updating = true
         oldestFlagged = Math.min(oldestFlagged, state.dataUpdatedAt)
       }

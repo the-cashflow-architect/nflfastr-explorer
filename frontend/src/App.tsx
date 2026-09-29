@@ -11,11 +11,14 @@ import { router } from './routes'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Football data changes weekly at most, and a reference page that refetches
-      // on every window focus wastes the visitor's bandwidth to show them the
-      // same number.
       staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
+      // Coming back to the tab, or to the app from the background, re-asks for
+      // anything past its staleTime (an hour for reference pages), so a focus
+      // costs nothing until then. It was off, and iOS keeps a backgrounded app
+      // alive for days: reopened, it showed the same figures as current with
+      // no refresh and no notice. React Query's focus listener is the page's
+      // visibilitychange, which a web view fires on returning to the front.
+      refetchOnWindowFocus: true,
       retry: 1,
       // An entry has to outlive the session for it to be worth writing to disk.
       // Queries built in api/endpoints.ts set their own, matching value.

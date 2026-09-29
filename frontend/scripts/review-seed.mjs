@@ -18,6 +18,7 @@
  *   offline, unsaved     a page never saved says so, and so does the bar;
  *                        search says it needs a connection, never "no match"
  *   another contract     a copy saved against a different API shape is dropped
+ *   resumed days later   coming back refreshes the figures, labelled meanwhile
  *
  * It writes the snapshot into storage directly rather than going through
  * seedIfEmpty(), which only runs on a device; that function's job is one guarded
@@ -255,6 +256,34 @@ const flashedEmpty = (page) => page.evaluate(() => window.__falseEmpty === true)
   if (homeRendered(t)) problems.push(`${label}: figures saved against another API contract were rendered by this build`)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   console.log(`  other-contract home rendered=${homeRendered(t)} (should be false)`)
+  await ctx.close()
+}
+
+/* ---- 7. reopened after three days in the background ----
+   iOS keeps a backgrounded app alive for days, and a tab can stay open as
+   long. Nothing re-asked on the way back, and the bar only flagged figures
+   from before launch, so three-day-old figures sat on screen as current.
+   Coming back must refresh them, and label them while it does. */
+{
+  let slow = false
+  const { ctx, page, errors, label } = await fresh('resumed', async (route) => {
+    if (slow) await new Promise((r) => setTimeout(r, 3000))
+    await answer(route)
+  }, RAW)
+  await page.clock.install()
+  await page.goto(BASE, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(1000)
+  let asked = 0
+  page.on('request', (r) => { if (new URL(r.url()).pathname.startsWith('/api/')) asked++ })
+  slow = true
+  await page.clock.fastForward(72 * 60 * 60 * 1000)
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })))
+  await page.waitForTimeout(1200)
+  const during = await banner(page)
+  if (!asked) problems.push(`${label}: reopened after three days, the app asked for nothing — the same figures stayed up as current`)
+  if (!during || !/while the latest load/.test(during)) problems.push(`${label}: three-day-old figures were shown during the refresh without saying so (banner: ${JSON.stringify(during)})`)
+  if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
+  console.log(`  resumed       requests=${asked}  during=${JSON.stringify(during)}`)
   await ctx.close()
 }
 
