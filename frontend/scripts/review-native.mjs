@@ -13,7 +13,8 @@
  *
  *   the launch screen is dismissed, and the status bar set, on the first frame
  *   export buttons, which cannot work in the iOS web view, are not offered
- *   "copy a link" copies the public website address, not capacitor://localhost
+ *   "copy a link" copies the public website address, not capacitor://localhost,
+ *   and says whether it worked
  *   the bundled first-launch figures still open a fresh install weeks later
  *   one page that throws does not leave every later page blank
  *
@@ -119,6 +120,15 @@ if (await copy.count()) {
   await copy.click()
   const copied = await page.evaluate(() => navigator.clipboard.readText())
   if (!copied.startsWith('https://')) problems.push(`"Copy a link" copied ${copied || 'nothing'}, which opens nothing for whoever it is sent to`)
+  // Said either way: silence left people pasting nothing, or tapping again to be sure.
+  if (!(await page.getByText('Link copied').count())) problems.push('"Copy a link" worked but said nothing')
+  const noClipboard = await ctx.newPage()
+  await noClipboard.addInitScript(() => Object.defineProperty(Navigator.prototype, 'clipboard', { get: () => undefined }))
+  await noClipboard.goto(base + LEADERBOARD, { waitUntil: 'networkidle' })
+  await noClipboard.getByRole('button', { name: 'Copy a link to this view' }).first().click()
+  await noClipboard.waitForTimeout(300)
+  if (!(await noClipboard.getByText('Couldn’t copy').count())) problems.push('"Copy a link" with no clipboard available failed without a word')
+  await noClipboard.close()
 } else {
   problems.push('no "Copy a link to this view" button on the leaderboard')
 }

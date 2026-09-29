@@ -87,6 +87,11 @@ open a **player page** — not just the home page, which comes from the bundled 
 proves nothing about the connection. It should load (after up to a minute if the server was
 asleep). If it says it could not reach the server, send me a screenshot.
 
+**One more, on the simulator:** open any leaderboard, tap the link icon above the table (**Copy
+a link to this view**) once. It should say **Link copied**. Paste into Notes: it should be an
+`https://nflfastr-explorer.onrender.com/…` address. If it says **Couldn't copy**, or the paste is
+empty, send me a screenshot.
+
 To upload: first run `npm run ios` again, right before every Archive, so the figures bundled
 into the app are the latest the server has. Then device dropdown on **Any iOS Device** →
 **Product → Archive → Distribute App → App Store Connect → Upload**.

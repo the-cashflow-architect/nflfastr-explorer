@@ -81,11 +81,19 @@ export function DataTable<Row>({
     () => new Set(columns.filter((c) => c.optional).map((c) => c.id)),
   )
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [copied, setCopied] = useState<'copied' | 'failed' | null>(null)
   const [density, setLocalDensity] = useState<Density>(getDensity)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density)
   }, [density])
+
+  // "Link copied" is a moment's confirmation, not a lasting state.
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(null), 2500)
+    return () => clearTimeout(timer)
+  }, [copied])
 
   const visible = useMemo(() => columns.filter((c) => !hidden.has(c.id)), [columns, hidden])
 
@@ -179,9 +187,24 @@ export function DataTable<Row>({
               <Download className="h-4 w-4" />
             </IconButton>
           ) : null}
+          {/* Said either way. A copy that silently fails leaves someone pasting
+              nothing into a message, and one that silently works leaves them
+              tapping again to be sure. */}
+          {copied ? (
+            <span role="status" className={`text-[11px] ${copied === 'failed' ? 'text-negative' : 'text-ink-3'}`}>
+              {copied === 'copied' ? 'Link copied' : 'Couldn’t copy'}
+            </span>
+          ) : null}
           <IconButton
             label="Copy a link to this view"
-            onClick={() => void navigator.clipboard?.writeText(shareableUrl())}
+            onClick={() => {
+              const clipboard = navigator.clipboard
+              const done = clipboard ? clipboard.writeText(shareableUrl()) : Promise.reject(new Error('no clipboard'))
+              done.then(
+                () => setCopied('copied'),
+                () => setCopied('failed'),
+              )
+            }}
           >
             <Link2 className="h-4 w-4" />
           </IconButton>
