@@ -27,7 +27,8 @@ type Freshness =
   | { kind: 'current' }
   | { kind: 'updating'; since: number }
   | { kind: 'failed'; since: number }
-  | { kind: 'offline'; since: number | null }
+  /** `missing`: something on screen is waiting for a connection with nothing saved. */
+  | { kind: 'offline'; since: number | null; missing: boolean }
 
 export function FreshnessBanner() {
   const client = useQueryClient()
@@ -42,9 +43,16 @@ export function FreshnessBanner() {
     let oldestFlagged = Infinity // only the ones this notice is about
     let updating = false
     let failed = false
+    let missing = false
     for (const query of client.getQueryCache().getAll()) {
       const { state } = query
-      if (!query.getObserversCount() || state.data === undefined) continue
+      if (!query.getObserversCount()) continue
+      // Held for a connection with nothing saved to show instead. Search is
+      // left out: the palette says so itself, and it is not the page.
+      if (state.data === undefined) {
+        if (state.fetchStatus === 'paused' && query.queryKey[0] !== 'search') missing = true
+        continue
+      }
       oldestShown = Math.min(oldestShown, state.dataUpdatedAt)
       const fromDisk = state.dataUpdatedAt < SESSION_STARTED_AT
       // A refresh that failed while the old figures stayed up. Pages keep
@@ -60,7 +68,7 @@ export function FreshnessBanner() {
         oldestFlagged = Math.min(oldestFlagged, state.dataUpdatedAt)
       }
     }
-    return `${oldestShown}|${oldestFlagged}|${updating}|${failed}`
+    return `${oldestShown}|${oldestFlagged}|${updating}|${failed}|${missing}`
   })
 
   const freshness = read(summary, online)
@@ -79,9 +87,10 @@ export function FreshnessBanner() {
 }
 
 function read(summary: string, online: boolean): Freshness {
-  const [shownRaw, flaggedRaw, updating, failed] = summary.split('|')
+  const [shownRaw, flaggedRaw, updating, failed, missing] = summary.split('|')
   const finite = (raw: string) => (Number.isFinite(Number(raw)) ? Number(raw) : null)
-  if (!online) return { kind: 'offline', since: finite(shownRaw) }
+  // A paused query is itself the sign of no connection, whatever the radio said last.
+  if (!online || missing === 'true') return { kind: 'offline', since: finite(shownRaw), missing: missing === 'true' }
   const since = finite(flaggedRaw)
   if (since === null) return { kind: 'current' }
   // A failure outranks a refresh in progress: it is the one that will not
@@ -97,7 +106,11 @@ function sentence(f: Exclude<Freshness, { kind: 'current' }>) {
   const saved = f.since === null ? null : <Stamp at={f.since} />
   switch (f.kind) {
     case 'offline':
-      return saved ? <>No connection. Showing figures saved {saved}.</> : <>No connection. Nothing on this page has been saved to this device.</>
+      // "Showing figures saved …" over a page that shows none was the old
+      // sentence here: the date came from the footer's coverage line.
+      if (!saved) return <>No connection. Nothing on this page has been saved to this device.</>
+      if (f.missing) return <>No connection. Part of this page has not been saved to this device; the rest was saved {saved}.</>
+      return <>No connection. Showing figures saved {saved}.</>
     case 'updating':
       return <>Showing figures saved {saved} while the latest load.</>
     case 'failed':

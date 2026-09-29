@@ -104,7 +104,7 @@ export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => v
     }
   }, [])
 
-  const { data, error, isFetching } = useQuery(searchQuery(query))
+  const { data, error, isFetching, isPaused } = useQuery(searchQuery(query))
 
   const searching = query.trim().length >= 2
   const recent = searching ? [] : readRecent()
@@ -169,6 +169,10 @@ export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => v
                 ? 'Search is unreachable right now — this is not “no results”.'
                 : 'Search failed. Try again in a moment.'}
             </p>
+          ) : searching && isPaused && !data ? (
+            // Held for a connection, not answered: "Nothing matches" here would
+            // tell a visitor offline that a real player does not exist.
+            <p className="px-3 py-4 text-[13px] text-negative">No connection. Search needs the server.</p>
           ) : searching && !flat.length && !isFetching ? (
             <p className="px-3 py-4 text-[13px] text-ink-3">
               Nothing matches “{query}”. Players are searchable from 1999 onward.

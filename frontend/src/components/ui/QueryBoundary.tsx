@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
-import { ApiError } from '../../api/client'
+import { ApiError, NotSavedOfflineError } from '../../api/client'
 
 /**
  * How long a wait can run before silence becomes dishonest.
@@ -43,13 +43,17 @@ export function QueryBoundary({
 }) {
   if (error) {
     const api = error instanceof ApiError ? error : null
-    const message = api?.isNotFound
-      ? 'We have no record of that.'
-      : api?.isSeasonLoading
-        ? (api.message ?? 'That season is still loading. Try again in a few seconds.')
-        : api?.status === 0
-          ? 'Could not reach the server. This is not “no results” — the data is there, we just could not fetch it.'
-          : (api?.message ?? 'Something went wrong loading this.')
+    // No connection and nothing saved says exactly that: nothing was fetched,
+    // so "could not reach the server" would describe a request never made.
+    const message = error instanceof NotSavedOfflineError
+      ? error.message
+      : api?.isNotFound
+        ? 'We have no record of that.'
+        : api?.isSeasonLoading
+          ? (api.message ?? 'That season is still loading. Try again in a few seconds.')
+          : api?.status === 0
+            ? 'Could not reach the server. This is not “no results” — the data is there, we just could not fetch it.'
+            : (api?.message ?? 'Something went wrong loading this.')
     return (
       <div className="flex items-start gap-2 rounded-md border border-line bg-raised px-3 py-3 text-[13px]">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-negative" />

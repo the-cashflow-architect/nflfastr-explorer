@@ -32,6 +32,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Not a failed request: none was made. There is no connection, and nothing for
+ * this page was saved to the device, so React Query holds the fetch until the
+ * signal returns. Left alone, that state has no data, no error and is not
+ * "loading", and pages fell through to their empty message — "No seasons are
+ * loaded yet" over a database of twenty-seven seasons.
+ */
+export class NotSavedOfflineError extends ApiError {
+  constructor() {
+    super(0, 'No connection, and this page has not been saved to this device.')
+    this.name = 'NotSavedOfflineError'
+  }
+}
+
 export function apiUrl(path: string, params?: Record<string, unknown>): string {
   const url = `${BASE}${path}`
   if (!params) return url

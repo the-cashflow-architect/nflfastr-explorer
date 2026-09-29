@@ -15,6 +15,8 @@
  *                        away once they have
  *   refresh failed       the saved copy survives the failure, so the next two
  *                        launches still open on dated figures
+ *   offline, unsaved     a page never saved says so, and so does the bar;
+ *                        search says it needs a connection, never "no match"
  *
  * It writes the snapshot into storage directly rather than going through
  * seedIfEmpty(), which only runs on a device; that function's job is one guarded
@@ -69,6 +71,13 @@ async function fresh(label, routeApi, seed = SEED) {
   await ctx.addInitScript(([key, value]) => {
     if (!localStorage.getItem(key)) localStorage.setItem(key, value)
   }, [CACHE_KEY, seed])
+  // The home page once flashed its empty message for a few frames while the
+  // saved copy was read back from disk; too brief to screenshot, so watch for it.
+  await ctx.addInitScript(() => {
+    new MutationObserver(() => {
+      if (document.body?.textContent?.includes('Season data is not available')) window.__falseEmpty = true
+    }).observe(document, { childList: true, subtree: true, characterData: true })
+  })
   await ctx.route((url) => url.pathname.startsWith('/api/'), routeApi)
   const page = await ctx.newPage()
   const errors = []
@@ -90,6 +99,7 @@ async function answer(route) {
 const text = (page) => page.evaluate(() => document.body.innerText)
 const banner = (page) => page.evaluate(() => document.querySelector('.freshness-banner')?.textContent ?? null)
 const homeRendered = (t) => /Super Bowl|Standings/.test(t)
+const flashedEmpty = (page) => page.evaluate(() => window.__falseEmpty === true)
 
 /* ---- 1. server unreachable ---- */
 {
@@ -100,6 +110,7 @@ const homeRendered = (t) => /Super Bowl|Standings/.test(t)
   const b = await banner(page)
   if (!homeRendered(t)) problems.push(`${label}: the home page did not render from the snapshot — the seed's query keys no longer match the app's`)
   if (!b || !/saved/.test(b)) problems.push(`${label}: figures from the snapshot were shown with no notice saying when they were saved (banner: ${JSON.stringify(b)})`)
+  if (await flashedEmpty(page)) problems.push(`${label}: "Season data is not available" flashed while the saved copy was being restored`)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   await page.screenshot({ path: join(SHOTS, 'seed-unreachable.png') })
   console.log(`  unreachable   home rendered=${homeRendered(t)}  banner=${JSON.stringify(b)}`)
@@ -140,6 +151,7 @@ const homeRendered = (t) => /Super Bowl|Standings/.test(t)
   const b = await banner(page)
   if (!homeRendered(t)) problems.push(`${label}: a minutes-old snapshot did not render`)
   if (b) problems.push(`${label}: flagged an answer still inside the one-hour freshness window (${JSON.stringify(b)})`)
+  if (await flashedEmpty(page)) problems.push(`${label}: "Season data is not available" flashed while the saved copy was being restored`)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   console.log(`  in-window     home rendered=${homeRendered(t)}  banner=${JSON.stringify(b)}`)
   await ctx.close()
@@ -171,6 +183,45 @@ const homeRendered = (t) => /Super Bowl|Standings/.test(t)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   await page.screenshot({ path: join(SHOTS, 'seed-relaunch-after-failure.png') })
   console.log(`  relaunch      ${seen.join('  ')}`)
+  await ctx.close()
+}
+
+/* ---- 5. the signal goes, and the visitor taps somewhere never saved ----
+   React Query holds the fetch until the connection returns, and that state has
+   no data, no error and is not loading — so pages fell through to their empty
+   message ("No seasons are loaded yet"), /teams rendered a bare heading,
+   search said "Nothing matches" for real players, and the bar claimed
+   "Showing figures saved …" over a page showing none. */
+{
+  const { ctx, page, errors, label } = await fresh('offline-unsaved', answer)
+  await page.goto(BASE, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(1000)
+  await ctx.setOffline(true)
+  const seen = []
+  for (const [name, path] of [['Seasons', '/seasons'], ['Teams', '/teams'], ['Draft', '/draft']]) {
+    // A tap on the nav, not a page load: a reload offline would not reach the app at all.
+    await page.getByRole('link', { name, exact: true }).first().click()
+    await page.waitForURL((url) => url.pathname === path, { timeout: 5000 }).catch(() => {})
+    await page.waitForTimeout(800)
+    const main = await page.evaluate(() => document.querySelector('main')?.innerText ?? '')
+    const b = await banner(page)
+    seen.push(`${path}: ${JSON.stringify(main.replace(/\s+/g, ' ').slice(-70))}`)
+    if (!/No connection, and this page has not been saved/.test(main)) {
+      problems.push(`${label}: offline, ${path} did not say it has no saved copy (main: ${JSON.stringify(main.replace(/\s+/g, ' ').slice(0, 120))})`)
+    }
+    if (/No seasons are loaded yet/.test(main)) problems.push(`${label}: offline, ${path} claimed nothing is loaded`)
+    if (!b || !/not been saved/.test(b)) problems.push(`${label}: offline on ${path}, the bar did not say the page is not saved (banner: ${JSON.stringify(b)})`)
+  }
+  await page.screenshot({ path: join(SHOTS, 'seed-offline-unsaved.png') })
+  await page.keyboard.press('Control+k')
+  await page.waitForSelector('[role="dialog"] input', { timeout: 5000 })
+  await page.type('[role="dialog"] input', 'player', { delay: 40 })
+  await page.waitForTimeout(800)
+  const palette = await page.evaluate(() => document.querySelector('[role="dialog"]')?.innerText ?? '')
+  if (/Nothing matches/.test(palette)) problems.push(`${label}: offline, search said "Nothing matches" — a missing connection, not a missing player`)
+  if (!/No connection/.test(palette)) problems.push(`${label}: offline, search did not say it needs a connection (${JSON.stringify(palette.slice(0, 100))})`)
+  if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
+  console.log(`  offline       ${seen.join('  ')}  search=${JSON.stringify(palette.replace(/\s+/g, ' ').slice(-45))}`)
   await ctx.close()
 }
 

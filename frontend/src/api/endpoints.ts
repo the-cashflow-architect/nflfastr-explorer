@@ -1,5 +1,5 @@
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query'
-import { api } from './client'
+import { useIsRestoring, useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query'
+import { api, NotSavedOfflineError } from './client'
 import type { operations } from './schema'
 import { CACHE_MAX_AGE } from '../lib/offline'
 
@@ -86,14 +86,30 @@ function reference<T>(key: readonly unknown[], path: string, params?: Record<str
  * It is not hidden: the FreshnessBanner reads the same query and says the
  * figures could not be updated, and when they were from. With no data at all,
  * the error reaches QueryBoundary exactly as before.
+ *
+ * Two states with no data and no error are given their real meaning here, so
+ * no page can mistake them for "there is nothing":
+ * - Waiting for a connection, with nothing saved (fetchStatus 'paused'), is an
+ *   error: the page says so and offers the retry, never its empty message.
+ * - The first moments while the saved copy is read back from disk are loading.
+ *   Before, the home page flashed "Season data is not available right now."
  */
 function useReferenceQuery<T>(options: UseQueryOptions<T, Error, T, readonly unknown[]>): UseQueryResult<T, Error> {
   const result = useQuery(options)
+  const restoring = useIsRestoring()
   if (result.error && result.data !== undefined) {
     return { ...result, error: null } as unknown as UseQueryResult<T, Error>
   }
+  if (result.isPending && result.fetchStatus === 'paused') {
+    return { ...result, error: NOT_SAVED_OFFLINE, isError: true } as unknown as UseQueryResult<T, Error>
+  }
+  if (result.isPending && restoring) {
+    return { ...result, isLoading: true } as unknown as UseQueryResult<T, Error>
+  }
   return result
 }
+
+const NOT_SAVED_OFFLINE = new NotSavedOfflineError()
 
 export const useCoverageQuery = () => useReferenceQuery(reference<Coverage>(['coverage'], '/api/coverage'))
 
