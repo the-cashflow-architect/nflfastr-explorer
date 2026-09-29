@@ -158,7 +158,7 @@ export function SearchPalette({ onClose, initialQuery = '' }: { onClose: () => v
               if (event.key === 'Enter' && flat[active]) go(flat[active])
             }}
             placeholder="Find any player, team, or game"
-            className="w-full bg-transparent py-3 text-[15px] outline-none placeholder:text-ink-3"
+            className="w-full bg-transparent py-3 text-[16px] outline-none placeholder:text-ink-3"
           />
         </div>
 

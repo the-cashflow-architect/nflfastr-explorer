@@ -284,6 +284,17 @@ body {
     min-height: 44px;
     touch-action: manipulation;
   }
+
+  /* iOS zooms the page into any field whose text is under 16px the moment it is
+     focused. That was once stopped by switching pinch-zoom off for the whole
+     site (user-scalable=no), which also took zoom away from every visitor on a
+     browser that obeys it. A 16px floor on a touch screen stops the jump and
+     leaves zoom alone. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 .freshness-banner .is-spinning {

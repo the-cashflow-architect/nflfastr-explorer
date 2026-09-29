@@ -122,6 +122,30 @@ if (await copy.count()) {
   problems.push('no "Copy a link to this view" button on the leaderboard')
 }
 
+/* ---- pinch-zoom on, and no jump into a focused field ----
+   The same index.html is the public website. Switching zoom off to stop iOS
+   zooming into small fields took zoom away from every visitor whose browser
+   obeys it; a 16px floor on touch screens stops the jump instead. */
+const viewport = await page.evaluate(() => document.querySelector('meta[name="viewport"]')?.content ?? '')
+if (/user-scalable\s*=\s*(no|0)|maximum-scale/.test(viewport)) problems.push(`pinch-zoom is switched off (viewport "${viewport}"), on the website as well as the app`)
+const smallFields = []
+const measureFields = (where) =>
+  page.evaluate((label) => {
+    const fields = document.querySelectorAll("input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea")
+    return [...fields]
+      .filter((f) => f.getClientRects().length && parseFloat(getComputedStyle(f).fontSize) < 16)
+      .map((f) => `${label} ${f.tagName.toLowerCase()}${f.getAttribute('aria-label') ? ` "${f.getAttribute('aria-label')}"` : ''} at ${getComputedStyle(f).fontSize}`)
+  }, where)
+for (const path of ['/finder', '/teams?season=2024', LEADERBOARD]) {
+  await page.goto(base + path, { waitUntil: 'networkidle' })
+  smallFields.push(...(await measureFields(path)))
+}
+await page.goto(base + '/', { waitUntil: 'networkidle' })
+await page.click('#home-search')
+await page.waitForSelector('[role="dialog"] input', { timeout: 5000 }).catch(() => {})
+smallFields.push(...(await measureFields('search palette')))
+if (smallFields.length) problems.push(`fields iOS will zoom into when focused (under 16px): ${smallFields.slice(0, 5).join('; ')}`)
+
 for (const e of errors) problems.push(`page error on a device: ${e}`)
 
 /* ---- the bundled first-launch figures, installed long after the build ----
