@@ -17,6 +17,7 @@
  *                        launches still open on dated figures
  *   offline, unsaved     a page never saved says so, and so does the bar;
  *                        search says it needs a connection, never "no match"
+ *   another contract     a copy saved against a different API shape is dropped
  *
  * It writes the snapshot into storage directly rather than going through
  * seedIfEmpty(), which only runs on a device; that function's job is one guarded
@@ -236,6 +237,24 @@ const flashedEmpty = (page) => page.evaluate(() => window.__falseEmpty === true)
   if (!/No connection/.test(palette)) problems.push(`${label}: offline, search did not say it needs a connection (${JSON.stringify(palette.slice(0, 100))})`)
   if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
   console.log(`  offline       ${seen.join('  ')}  search=${JSON.stringify(palette.replace(/\s+/g, ' ').slice(-45))}`)
+  await ctx.close()
+}
+
+/* ---- 6. a copy saved against another API contract ----
+   Saved figures outlive deploys, and new code handed an answer of the old
+   shape can throw. The persister's buster is a hash of openapi.json, so a copy
+   made under any other contract is dropped, not rendered. Every copy saved
+   before the hash existed carries an empty buster, which is the case here. */
+{
+  const other = JSON.parse(SEED)
+  other.buster = ''
+  const { ctx, page, errors, label } = await fresh('other-contract', (route) => route.abort(), JSON.stringify(other))
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const t = await text(page)
+  if (homeRendered(t)) problems.push(`${label}: figures saved against another API contract were rendered by this build`)
+  if (errors.length) problems.push(`${label}: uncaught ${errors[0]}`)
+  console.log(`  other-contract home rendered=${homeRendered(t)} (should be false)`)
   await ctx.close()
 }
 

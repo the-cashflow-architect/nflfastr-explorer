@@ -5,7 +5,7 @@ import { removeOldestQuery } from '@tanstack/react-query-persist-client'
 import { RouterProvider } from 'react-router-dom'
 import { BreadcrumbProvider } from './components/shell/Breadcrumb'
 import { FreshnessBanner } from './components/shell/FreshnessBanner'
-import { CACHE_KEY, CACHE_MAX_AGE, shouldPersist } from './lib/offline'
+import { CACHE_BUSTER, CACHE_KEY, CACHE_MAX_AGE, shouldPersist } from './lib/offline'
 import { router } from './routes'
 
 const queryClient = new QueryClient({
@@ -50,6 +50,8 @@ export default function App() {
       persistOptions={{
         persister,
         maxAge: CACHE_MAX_AGE,
+        // Saved figures from another API contract are dropped, not rendered.
+        buster: CACHE_BUSTER,
         // Reference pages with data, even when their last refresh failed — see shouldPersist.
         dehydrateOptions: { shouldDehydrateQuery: shouldPersist },
       }}

@@ -23,11 +23,18 @@
  * Run: node scripts/build-seed-cache.mjs   (npm run ios does this for you)
  */
 import { QueryClient, dehydrate } from '@tanstack/query-core'
+import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const OUT = join(process.cwd(), 'public', 'seed-cache.json')
-const CACHE_BUSTER = '' // must match the persister's (none is set in App.tsx)
+// The same hash of the API contract that vite.config.ts gives the app's
+// persister. A snapshot carrying any other buster is thrown away on launch, so
+// the two must agree; review:seed fails if they do not.
+const CACHE_BUSTER = createHash('sha256')
+  .update(readFileSync(join(process.cwd(), 'openapi.json')))
+  .digest('hex')
+  .slice(0, 12)
 
 const fail = (lines) => {
   console.error(`\n${lines.join('\n')}\n`)

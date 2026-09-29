@@ -15,6 +15,7 @@
  *   export buttons, which cannot work in the iOS web view, are not offered
  *   "copy a link" copies the public website address, not capacitor://localhost
  *   the bundled first-launch figures still open a fresh install weeks later
+ *   one page that throws does not leave every later page blank
  *
  * API calls go to the local fixture API, as `npm run review` does. Nothing
  * reaches the network.
@@ -147,6 +148,40 @@ smallFields.push(...(await measureFields('search palette')))
 if (smallFields.length) problems.push(`fields iOS will zoom into when focused (under 16px): ${smallFields.slice(0, 5).join('; ')}`)
 
 for (const e of errors) problems.push(`page error on a device: ${e}`)
+
+/* ---- one page that throws must not blank every page after it ----
+   The page's error boundary lives in the shell, which stays mounted, and once
+   it caught an error it showed "could not be displayed" on every later route.
+   On the web a reload clears that; the app has no reload button. The seasons
+   answer is given a shape the page cannot read, then the visitor taps Teams. */
+{
+  const broken = await browser.newContext({ ...devices['iPhone 15 Pro'] })
+  await broken.addInitScript(nativeBridge)
+  await broken.route('**/*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/seasons') return await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"seasons": 27}' })
+    if (url.pathname.startsWith('/api/')) {
+      try {
+        const response = await route.fetch({ url: `${API}${url.pathname}${url.search}` })
+        return await route.fulfill({ response, headers: { ...response.headers(), 'access-control-allow-origin': '*' } })
+      } catch {
+        return await route.abort()
+      }
+    }
+    if (url.hostname === '127.0.0.1') return await route.continue()
+    return await route.abort()
+  })
+  const p = await broken.newPage()
+  await p.goto(base + '/seasons', { waitUntil: 'networkidle' })
+  await p.waitForTimeout(500)
+  const threw = /could not be displayed/.test(await p.evaluate(() => document.querySelector('main')?.innerText ?? ''))
+  await p.getByRole('link', { name: 'Teams', exact: true }).first().click()
+  await p.waitForTimeout(1500)
+  const after = await p.evaluate(() => document.querySelector('main')?.innerText ?? '')
+  if (!threw) problems.push('the error-boundary check could not make the seasons page throw — the check itself needs updating')
+  else if (/could not be displayed/.test(after)) problems.push('after one page threw, the next page tapped still said "could not be displayed" — the app would need a force-quit')
+  await broken.close()
+}
 
 /* ---- the bundled first-launch figures, installed long after the build ----
    The snapshot carried the moment `npm run ios` ran as its timestamp, and the

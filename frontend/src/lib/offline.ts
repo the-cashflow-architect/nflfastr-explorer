@@ -21,8 +21,18 @@ import type { Query } from '@tanstack/react-query'
  */
 export const isNative = Capacitor.isNativePlatform()
 
-/** Bumped when the cached shape changes, so old entries are dropped not mangled. */
+/** Where the saved cache lives. Its shape is guarded by CACHE_BUSTER, not by this name. */
 export const CACHE_KEY = 'gridiron.query-cache.v1'
+
+declare const __CACHE_BUSTER__: string
+
+/**
+ * A hash of the API contract (openapi.json), set in vite.config.ts. A saved copy
+ * made against any other contract is dropped on launch rather than handed to
+ * code that expects a different shape — which this once relied on someone
+ * remembering to edit the key above.
+ */
+export const CACHE_BUSTER = __CACHE_BUSTER__
 
 /**
  * How long a saved answer may still be shown, clearly dated.

@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Breadcrumb } from './Breadcrumb'
 import { ThemeToggle } from './ThemeToggle'
 import { SearchLauncher } from '../search/SearchLauncher'
@@ -21,6 +21,7 @@ const NAV = [
 ]
 
 export function AppShell() {
+  const { pathname } = useLocation()
   return (
     <div className="flex min-h-full flex-col">
       <header className="app-header sticky top-0 z-40 border-b border-line bg-page/95 backdrop-blur">
@@ -76,8 +77,9 @@ export function AppShell() {
 
       <main className="safe-x mx-auto w-full max-w-[1280px] flex-1 px-4 py-4 sm:px-6">
         <Breadcrumb />
-        {/* A page that throws shows a message; the shell and the nav survive. */}
-        <ErrorBoundary label="page">
+        {/* A page that throws shows a message; the shell and the nav survive,
+            and the next page is rendered afresh. */}
+        <ErrorBoundary label="page" resetKey={pathname}>
           <Outlet />
         </ErrorBoundary>
       </main>
