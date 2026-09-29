@@ -55,6 +55,10 @@ cannot do. **Submit this one last**, after the other three have been through rev
 
 ## Steps on the Mac
 
+If Terminal asks you to sign in to GitHub at the clone step, a plain GitHub password will be
+refused. Install **GitHub Desktop** and sign in once (or run `gh auth login` once), then run
+the clone again.
+
 ```bash
 git clone https://github.com/the-cashflow-architect/nflfastr-explorer.git
 cd nflfastr-explorer/frontend
@@ -68,8 +72,15 @@ server to wake so it can bundle the home page's figures. If it stops saying it c
 reach the API, run it again.
 
 In Xcode: blue **App** icon → **App** target → **Signing & Capabilities** → confirm **Team**
-shows your developer account. Pick an iPhone simulator and press ▶, then an **iPad Pro
-13-inch** (the app runs on iPad, so Apple reviews it on one).
+shows your developer account. If Team shows an error or an **Add an Account** button:
+**Xcode → Settings → Accounts → + → Apple ID**, sign in with the developer account, then come
+back. Pick an iPhone simulator and press ▶, then an **iPad Pro 13-inch** (the app runs on
+iPad, so Apple reviews it on one).
+
+To run it on your own iPhone: plug it in, pick it in the device dropdown and press ▶. First
+time only: on the iPhone, **Settings → Privacy & Security → Developer Mode → On**, let it
+restart, confirm, then press ▶ again. The Developer Mode switch only appears after the phone
+has been connected to Xcode once.
 
 **The one check that matters most:** delete the app from the simulator, launch it fresh, and
 open a **player page** — not just the home page, which comes from the bundled figures and
