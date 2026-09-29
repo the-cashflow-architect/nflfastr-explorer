@@ -109,6 +109,46 @@ async function checkInteractions(context, report) {
   await page.close()
 
   await checkHomeSearchCloses(context, report)
+  await checkRefusedSave(context, report)
+}
+
+/**
+ * A saved view the browser refused to store must not be listed as saved.
+ * It once was: the write swallowed the error after the list had already
+ * shown the view, and it was simply gone on the next visit.
+ */
+async function checkRefusedSave(context, report) {
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (e) => errors.push('PAGEERROR ' + String(e.message).slice(0, 200)))
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'gridiron.finder.views') throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      return setItem.call(this, key, value)
+    }
+  })
+  try {
+    await page.goto(BASE + '/finder?run=1', { waitUntil: 'networkidle', timeout: 45000 })
+    await page.fill('input[aria-label="Name this query"]', 'Review view', { timeout: 10000 })
+    await page.getByRole('button', { name: 'Save view' }).click()
+    await page.waitForTimeout(300)
+    const body = await page.locator('main').innerText()
+    if (!/Couldn.t save on this device/.test(body)) errors.push('FINDER a refused save said nothing')
+    if (await page.getByRole('button', { name: 'Review view', exact: true }).count()) errors.push('FINDER a view the browser refused to store was listed as saved')
+  } catch (e) {
+    errors.push('FINDER-SAVE ' + String(e.message).slice(0, 160))
+  }
+  report.push({
+    name: 'finder-refused-save',
+    route: '(Finder: save a view the browser refuses)',
+    chars: errors.length ? 0 : 1000,
+    words: 0,
+    errors: [...new Set(errors)].slice(0, 4),
+    failed: [],
+    snippet: errors.length ? 'refused save misreported' : 'refused save reported, not listed',
+  })
+  await page.close()
 }
 
 /**

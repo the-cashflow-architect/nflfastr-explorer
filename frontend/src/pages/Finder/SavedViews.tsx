@@ -36,11 +36,18 @@ function read(): SavedView[] {
   }
 }
 
-function write(views: SavedView[]): void {
+/**
+ * False when the browser refused: a private window, a full quota (the saved
+ * figures cache shares it), or storage switched off. The caller must say so —
+ * this once failed silently after the view was already listed as saved, which
+ * is the kind of small lie this block exists not to tell.
+ */
+function write(views: SavedView[]): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(views.slice(0, MAX)))
+    return true
   } catch {
-    /* A view we cannot remember still ran; the URL is the real record. */
+    return false
   }
 }
 
@@ -57,6 +64,7 @@ export function SavedViews({
 }) {
   const [views, setViews] = useState<SavedView[]>(read)
   const [name, setName] = useState('')
+  const [refused, setRefused] = useState(false)
 
   // Nothing saved and nothing to save: the block is not on the page at all.
   if (!canSave && views.length === 0) return null
@@ -68,15 +76,21 @@ export function SavedViews({
       { name: trimmed, search, savedAt: new Date().toISOString() },
       ...views.filter((view) => view.name !== trimmed),
     ].slice(0, MAX)
+    // Listed only once it is really kept. The query itself still ran, and its
+    // URL is still the real record, so nothing else changes.
+    const kept = write(next)
+    setRefused(!kept)
+    if (!kept) return
     setViews(next)
-    write(next)
     setName('')
   }
 
   const remove = (target: SavedView) => {
     const next = views.filter((view) => view !== target)
+    const kept = write(next)
+    setRefused(!kept)
+    if (!kept) return
     setViews(next)
-    write(next)
   }
 
   return (
@@ -137,6 +151,12 @@ export function SavedViews({
             Save view
           </button>
         </div>
+      ) : null}
+      {refused ? (
+        <p role="alert" className="mt-1.5 text-[12px] text-negative">
+          Couldn&rsquo;t save on this device. The browser refused to store it; the page&rsquo;s address still holds
+          this query.
+        </p>
       ) : null}
     </Section>
   )

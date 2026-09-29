@@ -71,8 +71,10 @@ export function PrivacyPage() {
 
         <Section title="Keeping and deleting">
           <p>
-            What is on your device stays there until you remove it: delete the app, or on the website clear this
-            site&rsquo;s data in your browser settings. The server&rsquo;s request logs are deleted automatically within
+            What is on your device stays there until you remove it &mdash; delete the app, or on the website clear
+            this site&rsquo;s data in your browser settings &mdash; or until your browser or iOS clears it, which they
+            can do on their own: Safari, for one, deletes a site&rsquo;s saved data after seven days without a visit.
+            So keep anything you cannot lose somewhere else too; a saved Finder view is also its page&rsquo;s address. The server&rsquo;s request logs are deleted automatically within
             30 days. Because we hold nothing tied to you, there is no account to close and no
             consent to revoke &mdash; but if you have a question about any of it, write to <Mail />.
           </p>
