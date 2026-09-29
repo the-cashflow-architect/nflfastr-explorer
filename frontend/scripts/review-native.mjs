@@ -14,6 +14,7 @@
  *   the launch screen is dismissed, and the status bar set, on the first frame
  *   export buttons, which cannot work in the iOS web view, are not offered
  *   "copy a link" copies the public website address, not capacitor://localhost
+ *   the bundled first-launch figures still open a fresh install weeks later
  *
  * API calls go to the local fixture API, as `npm run review` does. Nothing
  * reaches the network.
@@ -52,8 +53,8 @@ const BUNDLED = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 const browser = await chromium.launch(existsSync(BUNDLED) ? { executablePath: BUNDLED } : {})
 const problems = []
 
-const ctx = await browser.newContext({ ...devices['iPhone 15 Pro'], permissions: ['clipboard-read', 'clipboard-write'] })
-await ctx.addInitScript(() => {
+/** Enough of Capacitor's native bridge for @capacitor/core to believe it is on iOS. */
+function nativeBridge() {
   const calls = []
   window.__calls = calls
   window.webkit = { messageHandlers: { bridge: { postMessage() {} } } }
@@ -71,7 +72,10 @@ await ctx.addInitScript(() => {
     },
     nativeCallback: () => String(Math.random()),
   }
-})
+}
+
+const ctx = await browser.newContext({ ...devices['iPhone 15 Pro'], permissions: ['clipboard-read', 'clipboard-write'] })
+await ctx.addInitScript(nativeBridge)
 // The built app points at the production API; send it to the fixture instead.
 // Headshots and logos come from outside hosts; a device fetches them, this
 // does not. (One handler: Playwright tries the last-registered route first.)
@@ -120,6 +124,42 @@ if (await copy.count()) {
 
 for (const e of errors) problems.push(`page error on a device: ${e}`)
 
+/* ---- the bundled first-launch figures, installed long after the build ----
+   The snapshot carried the moment `npm run ios` ran as its timestamp, and the
+   persister discards one older than 21 days, so an install three weeks after
+   the build opened on the cold start the seed exists to prevent. This installs
+   a seed built 30 days ago onto an empty device with the server unreachable. */
+const seedPath = join(DIST, 'seed-cache.json')
+let seedNote = ''
+if (existsSync(seedPath)) {
+  const seed = JSON.parse(await readFile(seedPath, 'utf8'))
+  const month = 30 * 24 * 60 * 60 * 1000
+  seed.timestamp -= month
+  for (const q of seed.clientState.queries) {
+    q.state.dataUpdatedAt -= month
+    if (q.dehydratedAt) q.dehydratedAt -= month
+  }
+  const late = await browser.newContext({ ...devices['iPhone 15 Pro'] })
+  await late.addInitScript(nativeBridge)
+  await late.route('**/*', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/seed-cache.json') return await route.fulfill({ contentType: 'application/json', body: JSON.stringify(seed) })
+    if (url.hostname === '127.0.0.1' && !url.pathname.startsWith('/api/')) return await route.continue()
+    return await route.abort()
+  })
+  const first = await late.newPage()
+  await first.goto(base + '/', { waitUntil: 'domcontentloaded' })
+  await first.waitForTimeout(4000)
+  const home = await first.evaluate(() => document.body.innerText)
+  const bar = await first.evaluate(() => document.querySelector('.freshness-banner')?.textContent ?? '')
+  if (!/Super Bowl|Standings/.test(home)) problems.push('a fresh install 30 days after the build opened on nothing — the bundled figures had expired')
+  else if (!/saved/.test(bar)) problems.push(`a fresh install showed the bundled figures without dating them (bar: ${JSON.stringify(bar)})`)
+  seedNote = ` bundled figures open a month after the build (${JSON.stringify(bar)}).`
+  await late.close()
+} else {
+  seedNote = ' (No seed-cache.json in dist, so the first-launch check was SKIPPED: build one with `npm run seed` before `npm run build`.)'
+}
+
 await browser.close()
 server.close()
 
@@ -128,4 +168,4 @@ if (problems.length) {
   problems.forEach((p) => console.error(`  · ${p}`))
   process.exit(1)
 }
-console.log('\nDevice review passed: launch screen dismissed, status bar set, no dead export buttons, shared links are public.')
+console.log(`\nDevice review passed: launch screen dismissed, status bar set, no dead export buttons, shared links are public;${seedNote}`)

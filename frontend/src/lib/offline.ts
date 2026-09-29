@@ -96,7 +96,13 @@ export async function seedIfEmpty(): Promise<void> {
     // Parse before storing: a truncated file must not become the cache.
     const parsed = JSON.parse(seed)
     if (!parsed?.clientState?.queries?.length || typeof parsed.timestamp !== 'number') return
-    localStorage.setItem(CACHE_KEY, seed)
+    // Stamped as written to this device, not as built. The persister throws
+    // away a snapshot older than CACHE_MAX_AGE, so a build-time stamp meant any
+    // install more than three weeks after `npm run ios` opened on the cold
+    // start again. Each figure keeps its own dataUpdatedAt, which is the date
+    // the FreshnessBanner shows, so nothing passes for newer than it is.
+    parsed.timestamp = Date.now()
+    localStorage.setItem(CACHE_KEY, JSON.stringify(parsed))
   } catch {
     // No seed is a slower first screen, never a broken one.
   }

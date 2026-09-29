@@ -87,8 +87,9 @@ open a **player page** — not just the home page, which comes from the bundled 
 proves nothing about the connection. It should load (after up to a minute if the server was
 asleep). If it says it could not reach the server, send me a screenshot.
 
-To upload: device dropdown on **Any iOS Device** → **Product → Archive → Distribute App →
-App Store Connect → Upload**.
+To upload: first run `npm run ios` again, right before every Archive, so the figures bundled
+into the app are the latest the server has. Then device dropdown on **Any iOS Device** →
+**Product → Archive → Distribute App → App Store Connect → Upload**.
 
 ---
 
